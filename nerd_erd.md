@@ -78,20 +78,20 @@ Electron App — all RAG and answer logic runs locally (macOS + Windows)
 
 ### What runs where — quick reference
 
-| Component | Where it runs | Why |
-|---|---|---|
-| Cron sync | Dedicated always-on laptop | Stays on so the cron always fires; reps' own laptops can be closed |
-| Chunking + embedding | Dedicated laptop (during sync) | Runs once per changed doc, not per query |
-| Qdrant vectors | Local Docker :6333 on dedicated laptop, public via ngrok static HTTPS | Cron writes locally; Electron apps query over the tunnel |
-| Postgres metadata | Local Docker :5432 on dedicated laptop, public via bore.pub TCP | Cron writes locally; Electron apps query over the tunnel |
-| RAG query logic | Electron main process (local) | Low latency, no server hop during live call |
-| Answer generation | Electron → OpenAI API (local call) | Direct API call, no middleman |
-| Pre-call briefing | Electron → OpenAI API (local call) | Direct API call, no middleman |
-| Audio capture | Electron main process (local) | OS-level audio driver access |
-| Transcription | Electron → Deepgram (WebSocket) | Streaming STT, low latency |
-| Screen OCR | Electron main process (local) | Native per-OS (macOS ScreenCaptureKit+Vision / Windows Graphics Capture+Windows.Media.Ocr); on-demand only |
-| Mode store | Electron main process (local) | Per-rep `modes.json`; no sync needed |
-| Overlay UI | Electron renderer (local) | React, always-on-top window |
+| Component            | Where it runs                                                         | Why                                                                                                        |
+| -------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Cron sync            | Dedicated always-on laptop                                            | Stays on so the cron always fires; reps' own laptops can be closed                                         |
+| Chunking + embedding | Dedicated laptop (during sync)                                        | Runs once per changed doc, not per query                                                                   |
+| Qdrant vectors       | Local Docker :6333 on dedicated laptop, public via ngrok static HTTPS | Cron writes locally; Electron apps query over the tunnel                                                   |
+| Postgres metadata    | Local Docker :5432 on dedicated laptop, public via bore.pub TCP       | Cron writes locally; Electron apps query over the tunnel                                                   |
+| RAG query logic      | Electron main process (local)                                         | Low latency, no server hop during live call                                                                |
+| Answer generation    | Electron → OpenAI API (local call)                                    | Direct API call, no middleman                                                                              |
+| Pre-call briefing    | Electron → OpenAI API (local call)                                    | Direct API call, no middleman                                                                              |
+| Audio capture        | Electron main process (local)                                         | OS-level audio driver access                                                                               |
+| Transcription        | Electron → Deepgram (WebSocket)                                       | Streaming STT, low latency                                                                                 |
+| Screen OCR           | Electron main process (local)                                         | Native per-OS (macOS ScreenCaptureKit+Vision / Windows Graphics Capture+Windows.Media.Ocr); on-demand only |
+| Mode store           | Electron main process (local)                                         | Per-rep `modes.json`; no sync needed                                                                       |
+| Overlay UI           | Electron renderer (local)                                             | React, always-on-top window                                                                                |
 
 **The host laptop runs no HTTP server, no Express, no API endpoints.
 It is a single cron job that runs, syncs, and exits. Nothing else.**
@@ -103,6 +103,7 @@ It is a single cron job that runs, syncs, and exits. Nothing else.**
 ### Desktop framework — Electron
 
 Chosen over Tauri because:
+
 - `electron-audio-loopback` npm package handles system audio loopback (mic + speaker) on macOS 12.3+ out of the box; on Windows, system audio is captured via WASAPI loopback (Electron `getDisplayMedia` with audio, or a thin native addon). **[Verify]** Windows loopback path on target Windows versions.
 - One codebase ships both macOS and Windows; OS-specific native bits (capture exclusion, screen capture + OCR, audio loopback) sit behind a small platform layer
 - Full Node.js in main process — IPC, native addons, direct API calls all just work
@@ -112,6 +113,7 @@ Chosen over Tauri because:
 ### Transcription — Deepgram Nova-3
 
 Chosen over Whisper (local), AssemblyAI, ElevenLabs Scribe:
+
 - Sub-300ms streaming latency — fastest among production STT APIs
 - `utterance_end_ms` event fires the moment a speaker stops — this is the trigger for the RAG pipeline
 - Two simultaneous WebSocket connections: one for mic (`Me`), one for system audio (`Them`)
@@ -120,6 +122,7 @@ Chosen over Whisper (local), AssemblyAI, ElevenLabs Scribe:
 ### Vector database — Qdrant (self-hosted, local Docker)
 
 Chosen over Pinecone, LanceDB (embedded), pgvector:
+
 - Rust implementation: tight p99, no GC pauses, no cold-start variance
 - Native hybrid search (dense + sparse/BM25, RRF) — critical for an acronym- and number-heavy KB
 - No org-level filtering needed — single shared index, search across full knowledge base
@@ -135,6 +138,7 @@ Why not Pinecone / Qdrant Cloud: the self-hosted Docker setup has no quota and n
 ### Structured database — Postgres (self-hosted, local Docker)
 
 Stores: documents, document_chunks index, sync_runs log
+
 - Plain **Postgres 16 (`postgres:16`)** in Docker on the same dedicated laptop; data in a named volume (survives restarts)
 - Exposed publicly via a **bore.pub** free TCP tunnel (`bore local 5432 --to bore.pub`) → a public `host:port` used as the connection string by every Electron app (the cron runs on the same laptop and writes to `localhost:5432` directly)
 - Standard `libpq` connection string — no Supabase SDK/Auth/RLS/Edge Functions; schema managed via plain SQL migrations
@@ -167,6 +171,7 @@ Single provider across the stack (same as embeddings) — one API key, one SDK, 
 These three upgrades matter far more than the choice of top-k. All ship in v1, because the product promise is "the exact right number, cited, live" — the first wrong answer in a BD call is the failure we can't afford, so we don't defer accuracy.
 
 **1. Query rewrite (before embedding) — biggest single lever**
+
 - The raw transcript slice is a noisy query: two speakers, filler words, ASR errors, half-sentences. Embedding it directly matches messy speech against clean document chunks and retrieves mediocre pages.
 - A fast LLM call rewrites the transcript slice into a clean search question before embedding.
   e.g. "...uh what kind of uptime are you guys doing on the API these days..." → "What is the API uptime SLA?"
@@ -174,24 +179,27 @@ These three upgrades matter far more than the choice of top-k. All ship in v1, b
 - Use a small/fast model (e.g. gpt-5.4-mini) — ~100–150ms.
 
 **2. Hybrid search (dense + sparse, fused with RRF)**
+
 - Dense embeddings are weak on exact tokens: "GST", "MakeMyTrip", repo names, specific numbers — they find topically-similar pages, not the page with the literal term.
 - Add sparse/BM25 keyword search alongside dense and fuse both with Reciprocal Rank Fusion — Qdrant supports hybrid natively.
 - Critical for an acronym- and number-heavy internal KB.
 
 **3. Cohere Rerank**
+
 - **Final decision: retrieve top 20 → narrow to 8 → send 8 to the model.** This resolves the earlier 20-vs-5 contradiction — 20 is the candidate pool, 8 is what reaches generation.
 - A cross-encoder re-reads every candidate against the query; far more precise than raw cosine order. Adds ~150–200ms, fractions of a cent per query.
 
 **Plus, on the candidate set (applied between rerank and the final 5):**
+
 - **Score threshold, not fixed-k.** Keep at most 5, but drop anything below a relevance score — if only 2 chunks clear the bar, send 2. Never pad the prompt with junk: extra distractors cause "lost in the middle" errors where the model loses the one fact that matters.
-- **Dedup near-identical chunks.** Slack repeats the same number across 10 messages/threads; collapse them so the model sees one copy, not ten, and the 8 slots go to 8 *distinct* facts.
+- **Dedup near-identical chunks.** Slack repeats the same number across 10 messages/threads; collapse them so the model sees one copy, not ten, and the 8 slots go to 8 _distinct_ facts.
 - **Boost recency + authoritative sources** (a recent, pinned message > a stale one) so fresh data wins ties — pricing/SLA facts go stale.
 
 Order of operations: retrieve 20 → dedup → rerank → drop below threshold → take top 8 (often fewer).
 
 ### Screen grounding — native OCR (on-demand, per-OS)
 
-Some facts aren't in the synced KB — a number on the counterparty's shared deck, a figure on a dashboard, an open tab. Nerd grounds on the live screen *in addition to* the KB. Capture + OCR use each OS's native, local APIs behind one `ScreenContextService` interface.
+Some facts aren't in the synced KB — a number on the counterparty's shared deck, a figure on a dashboard, an open tab. Nerd grounds on the live screen _in addition to_ the KB. Capture + OCR use each OS's native, local APIs behind one `ScreenContextService` interface.
 
 - **Capture (active display, on-demand only — never ambient):**
   - **macOS:** `ScreenCaptureKit` grabs a frame.
@@ -210,6 +218,7 @@ Some facts aren't in the synced KB — a number on the counterparty's shared dec
 ### Sources (v1)
 
 **Slack** (6hr cron)
+
 - Dex Biz: C07LEENR3AM
 - Dex GTM: C0A2T8NN08J
 - Dex Internal: C06SN0JS1R8
@@ -229,6 +238,7 @@ C0B5MQ442JE  C0B6G3BAAAC  C0B4HHA5K0X  C0B4WUKJE8N  C0B50RZ0H6V  C0B4VKFGBD3
 ### Sync strategy — differential sync (not full rebuild)
 
 Every 6-hour cron run on the host laptop:
+
 1. Fetch remote manifest (doc id + `updated_at`) from each source API — lightweight
 2. Diff against the Postgres `documents` table by `content_hash` and `updated_at`
 3. Three outcomes:
@@ -489,18 +499,18 @@ DATABASE_URL=postgresql://admin:password@bore.pub:25649/localdb
 
 ## Complete cost breakdown (per rep per month)
 
-| Service | Plan | Cost |
-|---|---|---|
-| Host laptop (cron + Postgres + Qdrant) | Existing hardware, kept always-on | $0 |
-| Postgres (local Docker) | Self-hosted on dedicated laptop, Docker volume | $0 |
-| Qdrant (local Docker) | Self-hosted on dedicated laptop, Docker volume | $0 |
-| ngrok (Qdrant tunnel) | Free tier, static domain | $0 |
-| bore.pub (Postgres tunnel) | Free TCP tunnel | $0 |
-| OpenAI embeddings | text-embedding-3-small (sync only) | ~$0.50 |
-| Deepgram Nova-3 | Streaming (~2h calls/day) | ~$3–5 |
-| OpenAI API | gpt-5.5 (answers + briefing) + gpt-5.4-mini (query rewrite) | ~$3–8 |
-| Cohere Rerank | rerank-3.5 (per query, top 20 → up to 8) | ~$1–2 |
-| **Total** | | **~$7–14/mo per user** |
+| Service                                | Plan                                                        | Cost                   |
+| -------------------------------------- | ----------------------------------------------------------- | ---------------------- |
+| Host laptop (cron + Postgres + Qdrant) | Existing hardware, kept always-on                           | $0                     |
+| Postgres (local Docker)                | Self-hosted on dedicated laptop, Docker volume              | $0                     |
+| Qdrant (local Docker)                  | Self-hosted on dedicated laptop, Docker volume              | $0                     |
+| ngrok (Qdrant tunnel)                  | Free tier, static domain                                    | $0                     |
+| bore.pub (Postgres tunnel)             | Free TCP tunnel                                             | $0                     |
+| OpenAI embeddings                      | text-embedding-3-small (sync only)                          | ~$0.50                 |
+| Deepgram Nova-3                        | Streaming (~2h calls/day)                                   | ~$3–5                  |
+| OpenAI API                             | gpt-5.5 (answers + briefing) + gpt-5.4-mini (query rewrite) | ~$3–8                  |
+| Cohere Rerank                          | rerank-3.5 (per query, top 20 → up to 8)                    | ~$1–2                  |
+| **Total**                              |                                                             | **~$7–14/mo per user** |
 
 ---
 
@@ -520,14 +530,14 @@ DATABASE_URL=postgresql://admin:password@bore.pub:25649/localdb
 
 ## Key risks and mitigations
 
-| Risk | Mitigation |
-|---|---|
-| Local DB / tunnel unreachable during call | 2s timeout, show "context unavailable" — never hang the overlay |
-| bore.pub Postgres tunnel drops | Run the tunnel in a keepalive loop so it auto-reconnects: `while true; do bore local 5432 --to bore.pub; sleep 5; done` (note: assigned port can change on reconnect — update `DATABASE_URL`) |
-| Deepgram drops transcript | Rolling buffer still holds last clean segment; user can also type context manually in ManualInputBar |
-| Sync fails silently on the host laptop | sync_runs table logs every run + errors; overlay shows "last synced Xh ago" in header |
-| Screen share detects overlay | Per-OS capture exclusion (macOS `sharingType=.none`/CGWindowLevel; Windows `WDA_EXCLUDEFROMCAPTURE`) — test against Zoom, Google Meet, Teams on both OSes before launch |
-| Credentials exposed in app bundle | Acceptable for internal v1; add auth API layer before any external distribution |
+| Risk                                      | Mitigation                                                                                                                                                                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local DB / tunnel unreachable during call | 2s timeout, show "context unavailable" — never hang the overlay                                                                                                                               |
+| bore.pub Postgres tunnel drops            | Run the tunnel in a keepalive loop so it auto-reconnects: `while true; do bore local 5432 --to bore.pub; sleep 5; done` (note: assigned port can change on reconnect — update `DATABASE_URL`) |
+| Deepgram drops transcript                 | Rolling buffer still holds last clean segment; user can also type context manually in ManualInputBar                                                                                          |
+| Sync fails silently on the host laptop    | sync_runs table logs every run + errors; overlay shows "last synced Xh ago" in header                                                                                                         |
+| Screen share detects overlay              | Per-OS capture exclusion (macOS `sharingType=.none`/CGWindowLevel; Windows `WDA_EXCLUDEFROMCAPTURE`) — test against Zoom, Google Meet, Teams on both OSes before launch                       |
+| Credentials exposed in app bundle         | Acceptable for internal v1; add auth API layer before any external distribution                                                                                                               |
 
 ---
 
@@ -539,4 +549,4 @@ DATABASE_URL=postgresql://admin:password@bore.pub:25649/localdb
 
 ---
 
-*Last updated: June 2026 — removed AWS/EC2 entirely (the cron now runs on the same dedicated always-on laptop as Postgres + Qdrant, writing to both on localhost; only the Electron apps use the ngrok/bore.pub tunnels); resolved the open decisions (single shared Qdrant index, no degraded-mode fallbacks, laptop hosting). Prior: narrowed sources to Slack only (dropped github/notion/pitch/google-docs and removed the Zendesk integration); expanded Slack scope to every thread/message + text attachments + channel canvases across the Dex + 36 BizOps channels; renamed `chunks` table to `document_chunks`. Earlier: migrated DBs from Qdrant Cloud + Supabase to self-hosted Docker on a dedicated always-on laptop (Qdrant :6333 exposed via ngrok static HTTPS, Postgres :5432 exposed via bore.pub TCP, data in Docker volumes); dropped authentication for v1; reworked cost/risk sections for the tunnel setup; synced transcript buffer to 120s / 12-turn + last-3-answers memory. Originally: revised to local RAG architecture + cron-only server + pre-call briefing naming; added Modes (custom system prompt, local store), list/paragraph output toggle, widget shell behaviors, and on-demand screen OCR grounding; expanded to cross-platform (macOS + Windows)*
+_Last updated: June 2026 — removed AWS/EC2 entirely (the cron now runs on the same dedicated always-on laptop as Postgres + Qdrant, writing to both on localhost; only the Electron apps use the ngrok/bore.pub tunnels); resolved the open decisions (single shared Qdrant index, no degraded-mode fallbacks, laptop hosting). Prior: narrowed sources to Slack only (dropped github/notion/pitch/google-docs and removed the Zendesk integration); expanded Slack scope to every thread/message + text attachments + channel canvases across the Dex + 36 BizOps channels; renamed `chunks` table to `document_chunks`. Earlier: migrated DBs from Qdrant Cloud + Supabase to self-hosted Docker on a dedicated always-on laptop (Qdrant :6333 exposed via ngrok static HTTPS, Postgres :5432 exposed via bore.pub TCP, data in Docker volumes); dropped authentication for v1; reworked cost/risk sections for the tunnel setup; synced transcript buffer to 120s / 12-turn + last-3-answers memory. Originally: revised to local RAG architecture + cron-only server + pre-call briefing naming; added Modes (custom system prompt, local store), list/paragraph output toggle, widget shell behaviors, and on-demand screen OCR grounding; expanded to cross-platform (macOS + Windows)_
