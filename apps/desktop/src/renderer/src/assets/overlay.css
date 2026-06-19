@@ -1,0 +1,18 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: transparent; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; }
+.overlay-root { width: 100%; height: 100%; }
+.pill { background: rgba(12,12,14,0.88); border-radius: 27px; border: 1px solid rgba(255,255,255,0.08); color: white; display: flex; align-items: center; padding: 0 16px; gap: 8px; height: 54px; cursor: grab; user-select: none; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.pill-name { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+.pill-hint { font-size: 11px; color: rgba(255,255,255,0.38); flex: 1; }
+.pill-btn { -webkit-app-region: no-drag; background: none; border: none; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 15px; padding: 4px; border-radius: 6px; }
+.pill-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+.panel { background: rgba(12,12,14,0.88); border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; height: 100%; overflow: hidden; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.panel-header { display: flex; align-items: center; padding: 10px 12px; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.06); -webkit-app-region: drag; flex-shrink: 0; }
+.panel-name { font-size: 12px; font-weight: 600; color: white; letter-spacing: -0.02em; flex: 1; }
+.panel-btn { -webkit-app-region: no-drag; background: none; border: none; color: rgba(255,255,255,0.45); cursor: pointer; font-size: 12px; padding: 3px 5px; border-radius: 4px; line-height: 1; }
+.panel-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+.panel-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.panel-area { color: rgba(255,255,255,0.3); font-size: 11px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.panel-input-bar { padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+.panel-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-size: 12px; padding: 7px 10px; outline: none; }
+.panel-input::placeholder { color: rgba(255,255,255,0.3); }

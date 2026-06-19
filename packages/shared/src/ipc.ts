@@ -17,7 +17,10 @@ export const IPC = {
   SNAP_TO_CORNER: 'nerd:snap-to-corner',
   GENERATE_BRIEFING: 'nerd:generate-briefing',
   START_AUDIO: 'nerd:start-audio',
-  STOP_AUDIO: 'nerd:stop-audio'
+  STOP_AUDIO: 'nerd:stop-audio',
+  GET_COLLAPSED: 'nerd:get-collapsed',
+  SET_COLLAPSED: 'nerd:set-collapsed',
+  SET_OPACITY: 'nerd:set-opacity'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -53,4 +56,7 @@ export interface IpcSignatures {
   [IPC.GENERATE_BRIEFING]: { payload: GenerateBriefingRequest; direction: 'renderer->main' }
   [IPC.START_AUDIO]: { payload: void; direction: 'renderer->main' }
   [IPC.STOP_AUDIO]: { payload: void; direction: 'renderer->main' }
+  [IPC.GET_COLLAPSED]: { payload: void; response: boolean; direction: 'renderer->main' }
+  [IPC.SET_COLLAPSED]: { payload: boolean; direction: 'renderer->main' }
+  [IPC.SET_OPACITY]: { payload: number; direction: 'renderer->main' }
 }
