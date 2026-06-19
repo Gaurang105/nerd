@@ -36,6 +36,7 @@ export interface NerdApi {
   onAnswer: (cb: (token: AnswerToken) => void) => () => void
   onTranscript: (cb: (utt: TranscriptUtterance) => void) => () => void
   onBriefingReady: (cb: (brief: BriefingResponse) => void) => () => void
+  onBriefingError: (cb: (message: string) => void) => () => void
 }
 
 declare global {

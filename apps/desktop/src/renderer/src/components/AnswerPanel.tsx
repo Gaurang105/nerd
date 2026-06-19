@@ -1,18 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AnswerToken, Citation, OutputFormat } from '@nerd/shared'
+import type { Citation, OutputFormat } from '@nerd/shared'
 
 export function AnswerPanel(): React.JSX.Element {
-  const [tokens, setTokens] = useState<string[]>([])
+  const [answer, setAnswer] = useState('')
   const [citations, setCitations] = useState<Citation[]>([])
   const [streaming, setStreaming] = useState(false)
   const [format, setFormat] = useState<OutputFormat>('list')
+  const lastRequestId = useRef('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const unsub = window.nerd.onAnswer((token: AnswerToken) => {
+    const unsub = window.nerd.onAnswer((token) => {
+      // Fix 5: reset answer when a new requestId starts streaming
+      if (token.requestId !== lastRequestId.current) {
+        lastRequestId.current = token.requestId
+        setAnswer('')
+        setCitations([])
+      }
+
       if (!token.done) {
         setStreaming(true)
-        setTokens((prev) => [...prev, token.token])
+        // Fix 27: single string state avoids O(n²) array join on every token
+        setAnswer((prev) => prev + token.token)
       } else {
         setStreaming(false)
         if (token.citations) setCitations(token.citations)
@@ -23,17 +32,15 @@ export function AnswerPanel(): React.JSX.Element {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [tokens])
+  }, [answer])
 
   const toggleFormat = (): void => {
     const next: OutputFormat = format === 'list' ? 'paragraph' : 'list'
     setFormat(next)
     window.nerd.setOutputFormat(next)
-    setTokens([]) // clear on format switch
+    setAnswer('')
     setCitations([])
   }
-
-  const answer = tokens.join('')
 
   return (
     <div className="answer-panel" data-testid="answer-area">
@@ -59,7 +66,17 @@ export function AnswerPanel(): React.JSX.Element {
       {citations.length > 0 && (
         <div className="answer-citations">
           {citations.map((c, i) => (
-            <a key={i} href={c.url ?? '#'} className="citation-chip" title={c.docTitle ?? c.source}>
+            <a
+              key={i}
+              href={c.url ?? '#'}
+              className="citation-chip"
+              title={c.docTitle ?? c.source}
+              onClick={(e) => {
+                e.preventDefault()
+                // Fix 44: open in default browser, not inside the Electron renderer
+                if (c.url) window.open(c.url, '_blank')
+              }}
+            >
               {c.docTitle ?? c.source}
             </a>
           ))}

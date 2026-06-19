@@ -26,6 +26,10 @@ import { TranscriptionService } from './services/transcription.service'
 import { ScreenContextService } from './services/screen.service'
 import { HotkeyService } from './services/hotkey.service'
 
+const VALID_CORNERS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right'])
+const MAX_QUESTION_LENGTH = 4000
+const MAX_AUDIO_CHUNK_BYTES = 65536 // 64KB per chunk max
+
 let windowService: WindowService
 let modeService: ModeService
 
@@ -33,6 +37,7 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.headout.nerd')
   app.on('browser-window-created', (_, win) => optimizer.watchWindowShortcuts(win))
 
+  // Fix 1: initMain registers the IPC handler that exposeLoopbackAudioMediaStream() needs in preload
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const loopback = require('electron-audio-loopback')
@@ -69,7 +74,6 @@ app.whenReady().then(() => {
   const transcriptionService = new TranscriptionService(process.env['DEEPGRAM_API_KEY'] ?? '')
   const screenService = new ScreenContextService()
 
-  // Init Tesseract in background (non-blocking)
   screenService.init().catch(console.error)
 
   let outputFormat: OutputFormat = 'list'
@@ -87,14 +91,20 @@ app.whenReady().then(() => {
   hotkeyService.register()
 
   // Window
-  ipcMain.handle(IPC.SNAP_TO_CORNER, (_e, { corner }: SnapToCornerRequest) =>
-    windowService.snapToCorner(corner)
-  )
+  // Fix 7: validate corner before use
+  ipcMain.handle(IPC.SNAP_TO_CORNER, (_e, payload: unknown) => {
+    const req = payload as SnapToCornerRequest
+    if (!req || !VALID_CORNERS.has(req.corner)) return
+    return windowService.snapToCorner(req.corner)
+  })
   ipcMain.handle(IPC.GET_COLLAPSED, () => windowService.isCollapsed())
   ipcMain.handle(IPC.SET_COLLAPSED, (_e, collapsed: boolean) =>
     windowService.setCollapsed(collapsed)
   )
-  ipcMain.handle(IPC.SET_OPACITY, (_e, opacity: number) => windowService.setOpacity(opacity))
+  ipcMain.handle(IPC.SET_OPACITY, (_e, opacity: number) => {
+    if (typeof opacity !== 'number') return
+    return windowService.setOpacity(opacity)
+  })
 
   // Modes
   ipcMain.handle(IPC.LIST_MODES, () => modeService.listModes())
@@ -115,8 +125,7 @@ app.whenReady().then(() => {
     outputFormat = fmt
   })
 
-  // Audio capture + Deepgram transcription
-  // Audio is captured renderer-side via electron-audio-loopback and forwarded over IPC.
+  // Audio capture — renderer-side via electron-audio-loopback + getUserMedia, forwarded here
   ipcMain.handle(IPC.START_AUDIO, async () => {
     transcriptionService.start()
     win.webContents.send(IPC.START_AUDIO_CAPTURE)
@@ -127,7 +136,9 @@ app.whenReady().then(() => {
     win.webContents.send(IPC.STOP_AUDIO_CAPTURE)
   })
 
+  // Fix 7: validate audio chunk size
   ipcMain.on(IPC.SEND_AUDIO_CHUNK, (_e, chunk: { data: ArrayBuffer; source: 'mic' | 'system' }) => {
+    if (!chunk?.data || chunk.data.byteLength > MAX_AUDIO_CHUNK_BYTES) return
     const buf = Buffer.from(chunk.data)
     if (chunk.source === 'mic') {
       transcriptionService.sendMicAudio(buf)
@@ -136,31 +147,40 @@ app.whenReady().then(() => {
     }
   })
 
-  // Forward transcript utterances to renderer
   transcriptionService.on('utterance', (utt) => {
     win.webContents.send(IPC.ON_TRANSCRIPT, utt)
   })
 
   // RAG — ask manually
-  ipcMain.handle(IPC.ASK_MANUALLY, async (_e, { question }: AskManuallyRequest) => {
+  // Fix 2 + Fix 5 + Fix 7: abort terminates previous request in UI; requestId propagated
+  ipcMain.handle(IPC.ASK_MANUALLY, async (_e, payload: unknown) => {
+    const req = payload as AskManuallyRequest
+    // Fix 7: validate input
+    if (!req?.question || typeof req.question !== 'string') return
+    const question = req.question.slice(0, MAX_QUESTION_LENGTH)
+
+    const browserWin = windowService.getWindow()
+
+    // Fix 2: send done:true for previous in-flight request before cancelling it
+    if (currentAbortController && currentRequestId > 0) {
+      const prevId = String(currentRequestId)
+      browserWin.webContents.send(IPC.ON_ANSWER, {
+        requestId: prevId,
+        token: '',
+        done: true,
+        citations: []
+      })
+    }
     currentAbortController?.abort()
     const ac = new AbortController()
     currentAbortController = ac
     const requestId = String(++currentRequestId)
 
-    const browserWin = windowService.getWindow()
     const systemPrompt = modeService.getActiveSystemPrompt()
 
     try {
-      let cleanQuestion: string
-      try {
-        cleanQuestion = await ragService.rewriteQuery(
-          question,
-          AbortSignal.any([ac.signal, AbortSignal.timeout(250)])
-        )
-      } catch {
-        cleanQuestion = question
-      }
+      // Skip rewriteQuery for direct manual questions — use verbatim
+      const cleanQuestion = question
 
       if (ac.signal.aborted) return
 
@@ -171,12 +191,14 @@ app.whenReady().then(() => {
           AbortSignal.any([ac.signal, AbortSignal.timeout(300)])
         )
       } catch {
-        browserWin.webContents.send(IPC.ON_ANSWER, {
-          requestId,
-          token: '(embedding unavailable)',
-          done: true,
-          citations: []
-        })
+        if (!ac.signal.aborted) {
+          browserWin.webContents.send(IPC.ON_ANSWER, {
+            requestId,
+            token: '(embedding unavailable)',
+            done: true,
+            citations: []
+          })
+        }
         return
       }
 
@@ -212,8 +234,8 @@ app.whenReady().then(() => {
         {
           question: cleanQuestion,
           chunks: reranked,
-          screenText: '', // populated in Slice 8
-          transcriptContext: question,
+          screenText: '',
+          transcriptContext: '',
           outputFormat,
           systemPrompt,
           requestId
@@ -235,39 +257,41 @@ app.whenReady().then(() => {
     }
   })
 
-  // Briefing
-  ipcMain.handle(
-    IPC.GENERATE_BRIEFING,
-    async (_e, { meetingDescription }: GenerateBriefingRequest) => {
-      try {
-        const briefing = await briefingService.generateBriefing(
-          meetingDescription,
-          modeService.getActiveSystemPrompt()
-        )
-        windowService.getWindow().webContents.send(IPC.ON_BRIEFING_READY, briefing)
-      } catch (err) {
-        console.error('[briefing] failed:', err)
-      }
+  // Briefing — Fix 6: emit ON_BRIEFING_ERROR on failure so renderer can reset loading state
+  ipcMain.handle(IPC.GENERATE_BRIEFING, async (_e, payload: unknown) => {
+    const req = payload as GenerateBriefingRequest
+    if (!req?.meetingDescription || typeof req.meetingDescription !== 'string') return
+    try {
+      const briefing = await briefingService.generateBriefing(
+        req.meetingDescription.slice(0, MAX_QUESTION_LENGTH),
+        modeService.getActiveSystemPrompt()
+      )
+      windowService.getWindow().webContents.send(IPC.ON_BRIEFING_READY, briefing)
+    } catch (err) {
+      console.error('[briefing] failed:', err)
+      windowService.getWindow().webContents.send(IPC.ON_BRIEFING_ERROR, String(err))
     }
-  )
+  })
 
-  // Last-synced badge
+  // Last-synced badge — Fix: cast finished_at to Number to avoid NaN
   ipcMain.handle(IPC.GET_LAST_SYNC_INFO, async () => {
     try {
       const { data } = await supabase
         .from('sync_runs')
-        .select('source, finished_at, docs_new, docs_updated')
+        .select('source, finished_at')
         .not('finished_at', 'is', null)
         .order('finished_at', { ascending: false })
         .limit(1)
       const row = data?.[0]
       if (!row?.finished_at) return null
-      const ageMs = Date.now() - row.finished_at
+      const finishedAt = Number(row.finished_at)
+      if (isNaN(finishedAt)) return null
+      const ageMs = Date.now() - finishedAt
       const ageHours = Math.floor(ageMs / 3600000)
       const ageMinutes = Math.floor(ageMs / 60000)
       return {
         age: ageHours >= 1 ? `${ageHours}h ago` : `${ageMinutes}m ago`,
-        source: row.source as string
+        source: String(row.source)
       }
     } catch {
       return null

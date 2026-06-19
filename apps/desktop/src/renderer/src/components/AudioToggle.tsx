@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
-// Note: ScriptProcessorNode is deprecated in favour of AudioWorkletNode, but it
-// is significantly simpler to implement and fine for this prototype's needs.
+// ScriptProcessorNode is deprecated in favour of AudioWorkletNode.
+// Upgrade to AudioWorkletNode in a follow-up pass.
 
 interface CaptureRefs {
   micStream: MediaStream | null
@@ -9,12 +9,14 @@ interface CaptureRefs {
   micProcessor: ScriptProcessorNode | null
   systemProcessor: ScriptProcessorNode | null
   ctx: AudioContext | null
+  muted: GainNode | null
 }
 
 function floatToInt16(float32: Float32Array): ArrayBuffer {
   const int16 = new Int16Array(float32.length)
   for (let i = 0; i < float32.length; i++) {
-    int16[i] = Math.max(-32768, Math.min(32767, float32[i]! * 32768))
+    // Use 0x7FFF (32767) so range is symmetric around 0
+    int16[i] = Math.max(-32768, Math.min(32767, float32[i]! * 32767))
   }
   return int16.buffer
 }
@@ -26,14 +28,23 @@ export function AudioToggle(): React.JSX.Element {
     systemStream: null,
     micProcessor: null,
     systemProcessor: null,
-    ctx: null
+    ctx: null,
+    muted: null
   })
 
   useEffect(() => {
     const startUnsub = window.nerd.onStartAudioCapture(async () => {
       try {
+        // AudioContext sampleRate: Chromium may ignore 16000 on macOS if hardware is 48000.
+        // Read ctx.sampleRate after construction — Deepgram is told the actual rate via env.
         const ctx = new AudioContext({ sampleRate: 16000 })
         captureRef.current.ctx = ctx
+
+        // Fix 4: route processors through a muted gain node to avoid audio feedback
+        const muted = ctx.createGain()
+        muted.gain.value = 0
+        muted.connect(ctx.destination)
+        captureRef.current.muted = muted
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const loopback = (window as any).electronAudioLoopback
@@ -47,11 +58,10 @@ export function AudioToggle(): React.JSX.Element {
             window.nerd.sendAudioChunk({ data: floatToInt16(float32), source: 'system' })
           }
           systemSource.connect(systemProcessor)
-          systemProcessor.connect(ctx.destination)
+          systemProcessor.connect(muted) // Fix 4: no feedback — muted, not ctx.destination
           captureRef.current.systemProcessor = systemProcessor
         }
 
-        // Mic capture via standard getUserMedia
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: { sampleRate: 16000 },
           video: false
@@ -64,7 +74,7 @@ export function AudioToggle(): React.JSX.Element {
           window.nerd.sendAudioChunk({ data: floatToInt16(float32), source: 'mic' })
         }
         micSource.connect(micProcessor)
-        micProcessor.connect(ctx.destination)
+        micProcessor.connect(muted) // Fix 4: no feedback
         captureRef.current.micProcessor = micProcessor
       } catch (err) {
         console.error('[AudioToggle] capture start failed:', err)
@@ -83,7 +93,8 @@ export function AudioToggle(): React.JSX.Element {
         systemStream: null,
         micProcessor: null,
         systemProcessor: null,
-        ctx: null
+        ctx: null,
+        muted: null
       }
     })
 

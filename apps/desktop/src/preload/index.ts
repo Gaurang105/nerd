@@ -12,6 +12,15 @@ import type {
   TranscriptUtterance
 } from '@nerd/shared'
 
+// Fix 1: expose electron-audio-loopback system stream to renderer
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { exposeLoopbackAudioMediaStream } = require('electron-audio-loopback')
+  exposeLoopbackAudioMediaStream()
+} catch {
+  // Package unavailable or not built — system audio capture will be skipped
+}
+
 const nerd = {
   snapToCorner: (corner: Corner): Promise<void> =>
     ipcRenderer.invoke(IPC.SNAP_TO_CORNER, { corner }),
@@ -34,15 +43,16 @@ const nerd = {
     ipcRenderer.invoke(IPC.GENERATE_BRIEFING, req),
   startAudio: (): Promise<void> => ipcRenderer.invoke(IPC.START_AUDIO),
   stopAudio: (): Promise<void> => ipcRenderer.invoke(IPC.STOP_AUDIO),
+  // Fix 8: use removeListener with specific handler ref, not removeAllListeners
   onStartAudioCapture: (cb: () => void): (() => void) => {
     const handler = (): void => cb()
     ipcRenderer.on(IPC.START_AUDIO_CAPTURE, handler)
-    return () => ipcRenderer.removeAllListeners(IPC.START_AUDIO_CAPTURE)
+    return () => ipcRenderer.removeListener(IPC.START_AUDIO_CAPTURE, handler)
   },
   onStopAudioCapture: (cb: () => void): (() => void) => {
     const handler = (): void => cb()
     ipcRenderer.on(IPC.STOP_AUDIO_CAPTURE, handler)
-    return () => ipcRenderer.removeAllListeners(IPC.STOP_AUDIO_CAPTURE)
+    return () => ipcRenderer.removeListener(IPC.STOP_AUDIO_CAPTURE, handler)
   },
   sendAudioChunk: (chunk: { data: ArrayBuffer; source: 'mic' | 'system' }): void =>
     ipcRenderer.send(IPC.SEND_AUDIO_CHUNK, chunk),
@@ -54,17 +64,23 @@ const nerd = {
   onAnswer: (cb: (token: AnswerToken) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, token: AnswerToken): void => cb(token)
     ipcRenderer.on(IPC.ON_ANSWER, handler)
-    return () => ipcRenderer.removeAllListeners(IPC.ON_ANSWER)
+    return () => ipcRenderer.removeListener(IPC.ON_ANSWER, handler)
   },
   onTranscript: (cb: (utt: TranscriptUtterance) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, utt: TranscriptUtterance): void => cb(utt)
     ipcRenderer.on(IPC.ON_TRANSCRIPT, handler)
-    return () => ipcRenderer.removeAllListeners(IPC.ON_TRANSCRIPT)
+    return () => ipcRenderer.removeListener(IPC.ON_TRANSCRIPT, handler)
   },
   onBriefingReady: (cb: (brief: BriefingResponse) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, brief: BriefingResponse): void => cb(brief)
     ipcRenderer.on(IPC.ON_BRIEFING_READY, handler)
-    return () => ipcRenderer.removeAllListeners(IPC.ON_BRIEFING_READY)
+    return () => ipcRenderer.removeListener(IPC.ON_BRIEFING_READY, handler)
+  },
+  // Fix 6: briefing error channel so BriefingCard can reset loading state
+  onBriefingError: (cb: (message: string) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, message: string): void => cb(message)
+    ipcRenderer.on(IPC.ON_BRIEFING_ERROR, handler)
+    return () => ipcRenderer.removeListener(IPC.ON_BRIEFING_ERROR, handler)
   }
 }
 

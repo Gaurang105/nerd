@@ -73,8 +73,15 @@ export class ModeService {
     if (!mode) throw new Error(`Mode not found: ${id}`)
 
     if (updates.isDefault === true) {
+      // Promote this mode to default; clear all others
       for (const m of this.modes) m.isDefault = false
+    } else if (updates.isDefault === false && mode.isDefault) {
+      // Fix 9: can't leave zero defaults — promote first other mode instead
+      const other = this.modes.find((m) => m.id !== id)
+      if (other) other.isDefault = true
+      else return mode // only one mode, no-op
     }
+
     Object.assign(mode, updates)
     this.persist()
     return mode

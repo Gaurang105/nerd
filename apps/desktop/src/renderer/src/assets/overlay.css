@@ -50,4 +50,5 @@ body { background: transparent; overflow: hidden; font-family: -apple-system, Bl
 .transcript-empty { font-size: 10px; color: rgba(255,255,255,0.2); font-style: italic; }
 .transcript-line { font-size: 11px; color: rgba(255,255,255,0.55); line-height: 1.4; margin-bottom: 3px; }
 .transcript-them { color: rgba(255,255,255,0.85); font-weight: 500; }
+.briefing-error { font-size: 10px; color: rgba(239,68,68,0.9); margin-top: 4px; }
 .audio-toggle--active { color: #ef4444; }

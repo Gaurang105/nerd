@@ -5,43 +5,61 @@ export function BriefingCard(): React.JSX.Element {
   const [briefing, setBriefing] = useState<BriefingResponse | null>(null)
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    const unsub = window.nerd.onBriefingReady((b: BriefingResponse) => {
+    const unsubReady = window.nerd.onBriefingReady((b: BriefingResponse) => {
       setBriefing(b)
       setLoading(false)
+      setErrorMsg('')
     })
-    return unsub
+    // Fix 6: listen for briefing errors so loading state always resets
+    const unsubError = window.nerd.onBriefingError((msg: string) => {
+      setLoading(false)
+      setErrorMsg(
+        msg.includes('API') ? 'Check your OpenAI API key.' : 'Briefing failed — try again.'
+      )
+    })
+    return () => {
+      unsubReady()
+      unsubError()
+    }
   }, [])
 
   const generate = async (): Promise<void> => {
     if (!description.trim()) return
     setLoading(true)
     setBriefing(null)
+    setErrorMsg('')
     await window.nerd.generateBriefing({ meetingDescription: description })
+    // generateBriefing resolves before the briefing arrives (it's async via IPC push).
+    // onBriefingReady / onBriefingError handle setLoading(false) — no action needed here.
   }
 
   return (
     <div className="briefing-card" data-testid="briefing-area">
       {!briefing ? (
-        <div className="briefing-input-area">
-          <input
-            className="panel-input"
-            placeholder="Describe your meeting to get a briefing…"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void generate()
-            }}
-          />
-          <button
-            type="button"
-            className="briefing-btn"
-            onClick={() => void generate()}
-            disabled={loading}
-          >
-            {loading ? '…' : 'Brief me'}
-          </button>
+        <div className="briefing-input-area" style={{ flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              className="panel-input"
+              placeholder="Describe your meeting to get a briefing…"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void generate()
+              }}
+            />
+            <button
+              type="button"
+              className="briefing-btn"
+              onClick={() => void generate()}
+              disabled={loading}
+            >
+              {loading ? '…' : 'Brief me'}
+            </button>
+          </div>
+          {errorMsg && <p className="briefing-error">{errorMsg}</p>}
         </div>
       ) : (
         <div className="briefing-content">

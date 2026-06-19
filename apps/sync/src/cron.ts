@@ -18,53 +18,66 @@ function requireEnv(key: string): string {
   return v
 }
 
+// Fix 10: re-entrancy guard so overlapping cron runs don't double-spend OpenAI / race Supabase
+let syncRunning = false
+
 async function runSync(): Promise<void> {
-  const openai = createOpenAIClient({ apiKey: requireEnv('OPENAI_API_KEY') })
-  const qdrantClient = createQdrantClient({
-    url: requireEnv('QDRANT_URL'),
-    apiKey: requireEnv('QDRANT_API_KEY')
-  })
-  const supabase = createSupabaseClient({
-    url: requireEnv('SUPABASE_URL'),
-    key: requireEnv('SUPABASE_SERVICE_ROLE_KEY')
-  })
-
-  await ensureCollection(qdrantClient)
-
-  const gdocs = new GDocsConnector({
-    clientId: requireEnv('GDOCS_OAUTH_CLIENT_ID'),
-    clientSecret: requireEnv('GDOCS_OAUTH_CLIENT_SECRET'),
-    refreshToken: requireEnv('GDOCS_OAUTH_REFRESH_TOKEN')
-  })
-
-  const runId = await insertSyncRun(supabase, {
-    source: 'gdocs',
-    startedAt: Date.now(),
-    finishedAt: null,
-    docsScanned: 0,
-    docsNew: 0,
-    docsUpdated: 0,
-    docsSkipped: 0,
-    docsDeleted: 0,
-    errors: []
-  })
+  if (syncRunning) {
+    log.warn('skipping cron — previous sync still running')
+    return
+  }
+  syncRunning = true
 
   try {
-    const stats = await syncSource({
+    const openai = createOpenAIClient({ apiKey: requireEnv('OPENAI_API_KEY') })
+    const qdrantClient = createQdrantClient({
+      url: requireEnv('QDRANT_URL'),
+      apiKey: requireEnv('QDRANT_API_KEY')
+    })
+    const supabase = createSupabaseClient({
+      url: requireEnv('SUPABASE_URL'),
+      key: requireEnv('SUPABASE_SERVICE_ROLE_KEY')
+    })
+
+    await ensureCollection(qdrantClient)
+
+    const gdocs = new GDocsConnector({
+      clientId: requireEnv('GDOCS_OAUTH_CLIENT_ID'),
+      clientSecret: requireEnv('GDOCS_OAUTH_CLIENT_SECRET'),
+      refreshToken: requireEnv('GDOCS_OAUTH_REFRESH_TOKEN')
+    })
+
+    const runId = await insertSyncRun(supabase, {
       source: 'gdocs',
-      connector: gdocs,
-      supabase,
-      qdrantClient,
-      openai
+      startedAt: Date.now(),
+      finishedAt: null,
+      docsScanned: 0,
+      docsNew: 0,
+      docsUpdated: 0,
+      docsSkipped: 0,
+      docsDeleted: 0,
+      errors: []
     })
-    await updateSyncRun(supabase, runId, { finishedAt: Date.now(), ...stats })
-    log.info('sync complete', { ...stats })
-  } catch (err) {
-    log.error('sync failed', err)
-    await updateSyncRun(supabase, runId, {
-      finishedAt: Date.now(),
-      errors: [{ message: String(err) }]
-    })
+
+    try {
+      const stats = await syncSource({
+        source: 'gdocs',
+        connector: gdocs,
+        supabase,
+        qdrantClient,
+        openai
+      })
+      await updateSyncRun(supabase, runId, { finishedAt: Date.now(), ...stats })
+      log.info('sync complete', { ...stats })
+    } catch (err) {
+      log.error('sync failed', err)
+      await updateSyncRun(supabase, runId, {
+        finishedAt: Date.now(),
+        errors: [{ message: String(err) }]
+      })
+    }
+  } finally {
+    syncRunning = false
   }
 }
 

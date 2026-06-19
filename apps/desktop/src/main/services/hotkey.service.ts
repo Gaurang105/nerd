@@ -7,7 +7,9 @@ import type { TranscriptionService } from './transcription.service'
 import type { ScreenContextService } from './screen.service'
 import type { ModeService } from './mode.service'
 
+// Fix 41 note: Cmd+Enter also sends in Slack. Document trade-off or use Cmd+Shift+Enter.
 const HOTKEY = 'CommandOrControl+Return'
+const OCR_TIMEOUT_MS = 800
 
 export class HotkeyService {
   private currentAbortController: AbortController | null = null
@@ -31,7 +33,16 @@ export class HotkeyService {
   }
 
   private async onHotkey(): Promise<void> {
-    // Cancel any in-flight request
+    // Fix 2: send done:true for previous in-flight request so renderer clears "thinking" state
+    if (this.currentAbortController && this.currentRequestId > 0) {
+      const prevId = String(this.currentRequestId)
+      this.win.webContents.send(IPC.ON_ANSWER, {
+        requestId: prevId,
+        token: '',
+        done: true,
+        citations: []
+      })
+    }
     this.currentAbortController?.abort()
     const ac = new AbortController()
     this.currentAbortController = ac
@@ -41,9 +52,15 @@ export class HotkeyService {
     const systemPrompt = this.modeService.getActiveSystemPrompt()
     const outputFormat = this.getOutputFormat()
 
+    // Fix 3: cap OCR at 800ms so it cannot block the pipeline — degrade to '' on timeout
+    const ocrPromise = Promise.race<string>([
+      this.screen.captureAndOcr().catch(() => ''),
+      new Promise<string>((resolve) => setTimeout(() => resolve(''), OCR_TIMEOUT_MS))
+    ])
+
     // Screen OCR + query rewrite run in parallel
     const [screenText, cleanQuestion] = await Promise.all([
-      this.screen.captureAndOcr().catch(() => ''),
+      ocrPromise,
       this.ragService
         .rewriteQuery(
           transcriptContext || '(no transcript — user triggered hotkey manually)',
@@ -54,7 +71,6 @@ export class HotkeyService {
 
     if (ac.signal.aborted) return
 
-    // Embed
     let vector: number[] = []
     try {
       vector = await this.ragService.embedQuery(
@@ -62,18 +78,19 @@ export class HotkeyService {
         AbortSignal.any([ac.signal, AbortSignal.timeout(300)])
       )
     } catch {
-      this.win.webContents.send(IPC.ON_ANSWER, {
-        requestId,
-        token: '(embedding unavailable)',
-        done: true,
-        citations: []
-      })
+      if (!ac.signal.aborted) {
+        this.win.webContents.send(IPC.ON_ANSWER, {
+          requestId,
+          token: '(embedding unavailable)',
+          done: true,
+          citations: []
+        })
+      }
       return
     }
 
     if (ac.signal.aborted) return
 
-    // Retrieve
     let chunks: Awaited<ReturnType<RAGService['retrieveChunks']>> = []
     try {
       chunks = await this.ragService.retrieveChunks(
@@ -87,7 +104,6 @@ export class HotkeyService {
 
     if (ac.signal.aborted) return
 
-    // Rerank
     let reranked = chunks
     try {
       reranked = await this.ragService.rerankChunks(
@@ -101,7 +117,6 @@ export class HotkeyService {
 
     if (ac.signal.aborted) return
 
-    // Stream generation
     for await (const token of this.ragService.generateAnswer(
       {
         question: cleanQuestion,

@@ -28,7 +28,8 @@ export const IPC = {
   GET_COLLAPSED: 'nerd:get-collapsed',
   SET_COLLAPSED: 'nerd:set-collapsed',
   SET_OPACITY: 'nerd:set-opacity',
-  GET_LAST_SYNC_INFO: 'nerd:get-last-sync-info'
+  GET_LAST_SYNC_INFO: 'nerd:get-last-sync-info',
+  ON_BRIEFING_ERROR: 'nerd:on-briefing-error'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -103,4 +104,5 @@ export interface IpcSignatures {
     response: LastSyncInfo | null
     direction: 'renderer->main'
   }
+  [IPC.ON_BRIEFING_ERROR]: { payload: string; direction: 'main->renderer' }
 }
