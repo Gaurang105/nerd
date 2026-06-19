@@ -11,7 +11,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "build:ocr": "node scripts/build-ocr.mjs",
-    "check": "tsx src/main/services/rerank.check.ts && tsx src/main/audio/transcriptBuffer.check.ts",
+    "check": "tsx src/main/services/rerank.check.ts && tsx src/main/audio/transcriptBuffer.check.ts && tsx src/main/services/displayFollow.check.ts",
     "start": "electron-vite preview",
     "dev": "npm run build:ocr && electron-vite dev",
     "build": "npm run build:ocr && npm run typecheck && electron-vite build",

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { Corner } from '@shared/types'
 import { loadSettings, saveSettings } from '../config/store'
+import { remapBounds } from './displayFollow'
 
 const PILL = { width: 220, height: 56 }
 const DEFAULT_PANEL = { width: 420, height: 560 }
@@ -13,6 +14,7 @@ export class WindowService {
   private collapsed = false
   private expandedSize = { ...DEFAULT_PANEL }
   private persistTimer: NodeJS.Timeout | null = null
+  private followTimer: NodeJS.Timeout | null = null
 
   constructor() {
     const settings = loadSettings()
@@ -31,6 +33,10 @@ export class WindowService {
       alwaysOnTop: true,
       skipTaskbar: true,
       fullscreenable: false,
+      // macOS: an NSPanel is what lets an overlay ride along on every Space,
+      // including other apps' fullscreen Spaces. visibleOnAllWorkspaces alone
+      // does not cover fullscreen Spaces for a plain window.
+      ...(process.platform === 'darwin' && { type: 'panel' as const }),
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         sandbox: false
@@ -51,6 +57,33 @@ export class WindowService {
     } else {
       this.win.loadFile(join(__dirname, '../renderer/index.html'))
     }
+
+    this.startCursorFollow()
+  }
+
+  // ponytail: poll the cursor's display and hop the overlay onto whichever screen
+  // the user is on. The display-id compare is its own debounce (no move while the
+  // cursor stays put; dragging moves window+cursor together so it never fights).
+  // Ceiling: mouse-as-focus proxy + fixed 750ms polling. Upgrade path: a native
+  // frontmost-window observer if the mouse proxy ever feels wrong.
+  private startCursorFollow(): void {
+    if (this.followTimer) return
+    this.followTimer = setInterval(() => this.followCursorDisplay(), 750)
+    this.win.on('closed', () => {
+      if (this.followTimer) { clearInterval(this.followTimer); this.followTimer = null }
+    })
+  }
+
+  private followCursorDisplay(): void {
+    if (this.win.isDestroyed()) return
+    const cursor = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const b = this.win.getBounds()
+    const winDisplay = screen.getDisplayNearestPoint(b)
+    if (cursor.id === winDisplay.id) return
+    const { x, y } = remapBounds(b, winDisplay.workArea, cursor.workArea, MARGIN)
+    this.win.setPosition(x, y)
+    // ponytail: no-ops while collapsed; collapsed pill position is not persisted by design
+    this.schedulePersist()
   }
 
   private defaultBounds(): { x: number; y: number; width: number; height: number } {
