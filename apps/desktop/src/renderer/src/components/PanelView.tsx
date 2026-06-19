@@ -1,5 +1,7 @@
 import type { Corner } from '@nerd/shared'
 import { ManualInputBar } from './ManualInputBar'
+import { AnswerPanel } from './AnswerPanel'
+import { BriefingCard } from './BriefingCard'
 
 interface PanelViewProps {
   onCollapse: () => void
@@ -40,11 +42,11 @@ export function PanelView({ onCollapse }: PanelViewProps): React.JSX.Element {
         </button>
       </div>
       <div className="panel-body">
-        <div className="panel-area" data-testid="briefing-area" style={{ flexBasis: '35%' }}>
-          Briefing
+        <div className="panel-area" style={{ flexBasis: '35%' }}>
+          <BriefingCard />
         </div>
-        <div className="panel-area" data-testid="answer-area" style={{ flexBasis: '40%' }}>
-          Answer
+        <div className="panel-area" style={{ flexBasis: '40%' }}>
+          <AnswerPanel />
         </div>
         <div className="panel-area" data-testid="transcript-area" style={{ flexBasis: '25%' }}>
           Transcript
