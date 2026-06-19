@@ -3,6 +3,8 @@ import { ManualInputBar } from './ManualInputBar'
 import { AnswerPanel } from './AnswerPanel'
 import { BriefingCard } from './BriefingCard'
 import { ModeSelector } from './ModeSelector'
+import { TranscriptFeed } from './TranscriptFeed'
+import { AudioToggle } from './AudioToggle'
 
 interface PanelViewProps {
   onCollapse: () => void
@@ -21,6 +23,7 @@ export function PanelView({ onCollapse }: PanelViewProps): React.JSX.Element {
       <div className="panel-header">
         <span className="panel-name">Nerd</span>
         <ModeSelector />
+        <AudioToggle />
         {CORNERS.map(({ corner, glyph, label }) => (
           <button
             key={corner}
@@ -50,8 +53,8 @@ export function PanelView({ onCollapse }: PanelViewProps): React.JSX.Element {
         <div className="panel-area" style={{ flexBasis: '40%' }}>
           <AnswerPanel />
         </div>
-        <div className="panel-area" data-testid="transcript-area" style={{ flexBasis: '25%' }}>
-          Transcript
+        <div className="panel-area" style={{ flexBasis: '25%', padding: 0, display: 'flex' }}>
+          <TranscriptFeed />
         </div>
         <ManualInputBar />
       </div>

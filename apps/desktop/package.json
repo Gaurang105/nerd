@@ -19,14 +19,18 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@deepgram/sdk": "^3.13.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@nerd/rag-clients": "workspace:^",
     "@nerd/shared": "workspace:*",
     "@qdrant/js-client-rest": "^1.18.0",
     "cohere-ai": "^8.0.0",
+    "electron-audio-loopback": "^1.0.6",
     "electron-updater": "^6.8.9",
-    "openai": "^6.44.0"
+    "openai": "^6.44.0",
+    "screenshot-desktop": "^1.15.4",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",

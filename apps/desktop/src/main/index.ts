@@ -17,6 +17,10 @@ import { WindowService } from './services/window.service'
 import { ModeService } from './services/mode.service'
 import { RAGService } from './services/rag.service'
 import { BriefingService } from './services/briefing.service'
+import { AudioCaptureService } from './services/audio.service'
+import { TranscriptionService } from './services/transcription.service'
+import { ScreenContextService } from './services/screen.service'
+import { HotkeyService } from './services/hotkey.service'
 
 let windowService: WindowService
 let modeService: ModeService
@@ -45,9 +49,26 @@ app.whenReady().then(() => {
   const ragService = new RAGService(openai, qdrant, cohere)
   const briefingService = new BriefingService(openai, qdrant)
 
+  const audioService = new AudioCaptureService()
+  const transcriptionService = new TranscriptionService(process.env['DEEPGRAM_API_KEY'] ?? '')
+  const screenService = new ScreenContextService()
+
+  // Init Tesseract in background (non-blocking)
+  screenService.init().catch(console.error)
+
   let outputFormat: OutputFormat = 'list'
   let currentRequestId = 0
   let currentAbortController: AbortController | null = null
+
+  const hotkeyService = new HotkeyService(
+    win,
+    ragService,
+    transcriptionService,
+    screenService,
+    modeService,
+    () => outputFormat
+  )
+  hotkeyService.register()
 
   // Window
   ipcMain.handle(IPC.SNAP_TO_CORNER, (_e, { corner }: SnapToCornerRequest) =>
@@ -78,9 +99,27 @@ app.whenReady().then(() => {
     outputFormat = fmt
   })
 
-  // Audio (stubs — AudioCaptureService lands in Slice 6)
-  ipcMain.handle(IPC.START_AUDIO, () => { /* stub */ })
-  ipcMain.handle(IPC.STOP_AUDIO, () => { /* stub */ })
+  // Audio capture + Deepgram transcription
+  ipcMain.handle(IPC.START_AUDIO, async () => {
+    try {
+      await audioService.start()
+      transcriptionService.start()
+      audioService.on('mic-data', (chunk: Buffer) => transcriptionService.sendMicAudio(chunk))
+      audioService.on('system-data', (chunk: Buffer) => transcriptionService.sendSystemAudio(chunk))
+    } catch (err) {
+      console.error('[START_AUDIO] failed:', err)
+    }
+  })
+
+  ipcMain.handle(IPC.STOP_AUDIO, () => {
+    audioService.stop()
+    transcriptionService.stop()
+  })
+
+  // Forward transcript utterances to renderer
+  transcriptionService.on('utterance', (utt) => {
+    win.webContents.send(IPC.ON_TRANSCRIPT, utt)
+  })
 
   // RAG — ask manually
   ipcMain.handle(IPC.ASK_MANUALLY, async (_e, { question }: AskManuallyRequest) => {
@@ -189,6 +228,13 @@ app.whenReady().then(() => {
       }
     }
   )
+
+  app.on('will-quit', () => {
+    hotkeyService.unregister()
+    audioService.stop()
+    transcriptionService.stop()
+    screenService.destroy().catch(console.error)
+  })
 })
 
 app.on('window-all-closed', () => app.quit())
