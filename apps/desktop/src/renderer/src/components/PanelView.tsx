@@ -5,6 +5,7 @@ import { BriefingCard } from './BriefingCard'
 import { ModeSelector } from './ModeSelector'
 import { TranscriptFeed } from './TranscriptFeed'
 import { AudioToggle } from './AudioToggle'
+import { SyncBadge } from './SyncBadge'
 
 interface PanelViewProps {
   onCollapse: () => void
@@ -22,6 +23,7 @@ export function PanelView({ onCollapse }: PanelViewProps): React.JSX.Element {
     <div className="panel">
       <div className="panel-header">
         <span className="panel-name">Nerd</span>
+        <SyncBadge />
         <ModeSelector />
         <AudioToggle />
         {CORNERS.map(({ corner, glyph, label }) => (

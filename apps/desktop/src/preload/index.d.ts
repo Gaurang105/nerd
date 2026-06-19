@@ -4,6 +4,7 @@ import type {
   BriefingResponse,
   Corner,
   GenerateBriefingRequest,
+  LastSyncInfo,
   Mode,
   OutputFormat,
   TranscriptUtterance
@@ -25,9 +26,13 @@ export interface NerdApi {
   generateBriefing: (req: GenerateBriefingRequest) => Promise<void>
   startAudio: () => Promise<void>
   stopAudio: () => Promise<void>
+  onStartAudioCapture: (cb: () => void) => () => void
+  onStopAudioCapture: (cb: () => void) => () => void
+  sendAudioChunk: (chunk: { data: ArrayBuffer; source: 'mic' | 'system' }) => void
   setCollapsed: (collapsed: boolean) => Promise<void>
   getCollapsed: () => Promise<boolean>
   setOpacity: (opacity: number) => Promise<void>
+  getLastSyncInfo: () => Promise<LastSyncInfo | null>
   onAnswer: (cb: (token: AnswerToken) => void) => () => void
   onTranscript: (cb: (utt: TranscriptUtterance) => void) => () => void
   onBriefingReady: (cb: (brief: BriefingResponse) => void) => () => void

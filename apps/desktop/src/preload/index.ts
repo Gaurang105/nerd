@@ -6,6 +6,7 @@ import type {
   BriefingResponse,
   Corner,
   GenerateBriefingRequest,
+  LastSyncInfo,
   Mode,
   OutputFormat,
   TranscriptUtterance
@@ -33,6 +34,19 @@ const nerd = {
     ipcRenderer.invoke(IPC.GENERATE_BRIEFING, req),
   startAudio: (): Promise<void> => ipcRenderer.invoke(IPC.START_AUDIO),
   stopAudio: (): Promise<void> => ipcRenderer.invoke(IPC.STOP_AUDIO),
+  onStartAudioCapture: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on(IPC.START_AUDIO_CAPTURE, handler)
+    return () => ipcRenderer.removeAllListeners(IPC.START_AUDIO_CAPTURE)
+  },
+  onStopAudioCapture: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on(IPC.STOP_AUDIO_CAPTURE, handler)
+    return () => ipcRenderer.removeAllListeners(IPC.STOP_AUDIO_CAPTURE)
+  },
+  sendAudioChunk: (chunk: { data: ArrayBuffer; source: 'mic' | 'system' }): void =>
+    ipcRenderer.send(IPC.SEND_AUDIO_CHUNK, chunk),
+  getLastSyncInfo: (): Promise<LastSyncInfo | null> => ipcRenderer.invoke(IPC.GET_LAST_SYNC_INFO),
   setCollapsed: (collapsed: boolean): Promise<void> =>
     ipcRenderer.invoke(IPC.SET_COLLAPSED, collapsed),
   getCollapsed: (): Promise<boolean> => ipcRenderer.invoke(IPC.GET_COLLAPSED),

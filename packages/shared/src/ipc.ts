@@ -22,9 +22,13 @@ export const IPC = {
   GENERATE_BRIEFING: 'nerd:generate-briefing',
   START_AUDIO: 'nerd:start-audio',
   STOP_AUDIO: 'nerd:stop-audio',
+  START_AUDIO_CAPTURE: 'nerd:start-audio-capture',
+  STOP_AUDIO_CAPTURE: 'nerd:stop-audio-capture',
+  SEND_AUDIO_CHUNK: 'nerd:send-audio-chunk',
   GET_COLLAPSED: 'nerd:get-collapsed',
   SET_COLLAPSED: 'nerd:set-collapsed',
-  SET_OPACITY: 'nerd:set-opacity'
+  SET_OPACITY: 'nerd:set-opacity',
+  GET_LAST_SYNC_INFO: 'nerd:get-last-sync-info'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -62,6 +66,16 @@ export interface SnapToCornerRequest {
   corner: Corner
 }
 
+export interface AudioChunkPayload {
+  data: ArrayBuffer
+  source: 'mic' | 'system'
+}
+
+export interface LastSyncInfo {
+  age: string
+  source: string
+}
+
 export interface IpcSignatures {
   [IPC.ON_ANSWER]: { payload: AnswerToken; direction: 'main->renderer' }
   [IPC.ON_TRANSCRIPT]: { payload: TranscriptUtterance; direction: 'main->renderer' }
@@ -78,7 +92,15 @@ export interface IpcSignatures {
   [IPC.GENERATE_BRIEFING]: { payload: GenerateBriefingRequest; direction: 'renderer->main' }
   [IPC.START_AUDIO]: { payload: void; direction: 'renderer->main' }
   [IPC.STOP_AUDIO]: { payload: void; direction: 'renderer->main' }
+  [IPC.START_AUDIO_CAPTURE]: { payload: void; direction: 'main->renderer' }
+  [IPC.STOP_AUDIO_CAPTURE]: { payload: void; direction: 'main->renderer' }
+  [IPC.SEND_AUDIO_CHUNK]: { payload: AudioChunkPayload; direction: 'renderer->main' }
   [IPC.GET_COLLAPSED]: { payload: void; response: boolean; direction: 'renderer->main' }
   [IPC.SET_COLLAPSED]: { payload: boolean; direction: 'renderer->main' }
   [IPC.SET_OPACITY]: { payload: number; direction: 'renderer->main' }
+  [IPC.GET_LAST_SYNC_INFO]: {
+    payload: void
+    response: LastSyncInfo | null
+    direction: 'renderer->main'
+  }
 }

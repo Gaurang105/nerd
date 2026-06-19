@@ -12,12 +12,16 @@ import type {
   SnapToCornerRequest,
   UpdateModeRequest
 } from '@nerd/shared'
-import { createOpenAIClient, createQdrantClient, createCohereClient } from '@nerd/rag-clients'
+import {
+  createOpenAIClient,
+  createQdrantClient,
+  createCohereClient,
+  createSupabaseClient
+} from '@nerd/rag-clients'
 import { WindowService } from './services/window.service'
 import { ModeService } from './services/mode.service'
 import { RAGService } from './services/rag.service'
 import { BriefingService } from './services/briefing.service'
-import { AudioCaptureService } from './services/audio.service'
 import { TranscriptionService } from './services/transcription.service'
 import { ScreenContextService } from './services/screen.service'
 import { HotkeyService } from './services/hotkey.service'
@@ -28,6 +32,14 @@ let modeService: ModeService
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.headout.nerd')
   app.on('browser-window-created', (_, win) => optimizer.watchWindowShortcuts(win))
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const loopback = require('electron-audio-loopback')
+    loopback.initMain(app)
+  } catch {
+    console.warn('[audio-loopback] electron-audio-loopback not available — audio capture disabled')
+  }
 
   windowService = new WindowService()
   modeService = new ModeService()
@@ -49,7 +61,11 @@ app.whenReady().then(() => {
   const ragService = new RAGService(openai, qdrant, cohere)
   const briefingService = new BriefingService(openai, qdrant)
 
-  const audioService = new AudioCaptureService()
+  const supabase = createSupabaseClient({
+    url: process.env['SUPABASE_URL'] ?? '',
+    key: process.env['SUPABASE_ANON_KEY'] ?? ''
+  })
+
   const transcriptionService = new TranscriptionService(process.env['DEEPGRAM_API_KEY'] ?? '')
   const screenService = new ScreenContextService()
 
@@ -100,20 +116,24 @@ app.whenReady().then(() => {
   })
 
   // Audio capture + Deepgram transcription
+  // Audio is captured renderer-side via electron-audio-loopback and forwarded over IPC.
   ipcMain.handle(IPC.START_AUDIO, async () => {
-    try {
-      await audioService.start()
-      transcriptionService.start()
-      audioService.on('mic-data', (chunk: Buffer) => transcriptionService.sendMicAudio(chunk))
-      audioService.on('system-data', (chunk: Buffer) => transcriptionService.sendSystemAudio(chunk))
-    } catch (err) {
-      console.error('[START_AUDIO] failed:', err)
-    }
+    transcriptionService.start()
+    win.webContents.send(IPC.START_AUDIO_CAPTURE)
   })
 
   ipcMain.handle(IPC.STOP_AUDIO, () => {
-    audioService.stop()
     transcriptionService.stop()
+    win.webContents.send(IPC.STOP_AUDIO_CAPTURE)
+  })
+
+  ipcMain.on(IPC.SEND_AUDIO_CHUNK, (_e, chunk: { data: ArrayBuffer; source: 'mic' | 'system' }) => {
+    const buf = Buffer.from(chunk.data)
+    if (chunk.source === 'mic') {
+      transcriptionService.sendMicAudio(buf)
+    } else {
+      transcriptionService.sendSystemAudio(buf)
+    }
   })
 
   // Forward transcript utterances to renderer
@@ -169,7 +189,9 @@ app.whenReady().then(() => {
           cleanQuestion,
           AbortSignal.any([ac.signal, AbortSignal.timeout(500)])
         )
-      } catch { /* use empty chunks */ }
+      } catch {
+        /* use empty chunks */
+      }
 
       if (ac.signal.aborted) return
 
@@ -229,9 +251,31 @@ app.whenReady().then(() => {
     }
   )
 
+  // Last-synced badge
+  ipcMain.handle(IPC.GET_LAST_SYNC_INFO, async () => {
+    try {
+      const { data } = await supabase
+        .from('sync_runs')
+        .select('source, finished_at, docs_new, docs_updated')
+        .not('finished_at', 'is', null)
+        .order('finished_at', { ascending: false })
+        .limit(1)
+      const row = data?.[0]
+      if (!row?.finished_at) return null
+      const ageMs = Date.now() - row.finished_at
+      const ageHours = Math.floor(ageMs / 3600000)
+      const ageMinutes = Math.floor(ageMs / 60000)
+      return {
+        age: ageHours >= 1 ? `${ageHours}h ago` : `${ageMinutes}m ago`,
+        source: row.source as string
+      }
+    } catch {
+      return null
+    }
+  })
+
   app.on('will-quit', () => {
     hotkeyService.unregister()
-    audioService.stop()
     transcriptionService.stop()
     screenService.destroy().catch(console.error)
   })

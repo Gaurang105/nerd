@@ -52,7 +52,7 @@ export function AnswerPanel(): React.JSX.Element {
         {answer ? (
           <p className="answer-text">{answer}</p>
         ) : (
-          <p className="answer-placeholder">Press ⌘↩ or type a question below</p>
+          <p className="answer-placeholder">⌘↩ to ask · or type below</p>
         )}
         <div ref={bottomRef} />
       </div>
