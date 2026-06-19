@@ -16,7 +16,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@nerd/shared": "workspace:*"
+    "@nerd/shared": "workspace:*",
+    "@qdrant/js-client-rest": "^1.18.0",
+    "@supabase/supabase-js": "^2.108.2",
+    "cohere-ai": "^8.0.0",
+    "openai": "^6.44.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

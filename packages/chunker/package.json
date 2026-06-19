@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@nerd/shared": "workspace:*"
+    "@nerd/shared": "workspace:*",
+    "gpt-tokenizer": "^3.4.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
