@@ -4,33 +4,29 @@ import { join } from 'path'
 import { IPC } from '@nerd/shared'
 import type {
   AskManuallyRequest,
+  CreateModeRequest,
+  DeleteModeRequest,
   GenerateBriefingRequest,
   OutputFormat,
-  SnapToCornerRequest
+  SetActiveModeRequest,
+  SnapToCornerRequest,
+  UpdateModeRequest
 } from '@nerd/shared'
 import { createOpenAIClient, createQdrantClient, createCohereClient } from '@nerd/rag-clients'
 import { WindowService } from './services/window.service'
+import { ModeService } from './services/mode.service'
 import { RAGService } from './services/rag.service'
 import { BriefingService } from './services/briefing.service'
 
-const DEFAULT_SYSTEM_PROMPT = `You are Nerd, a real-time assistant for a Headout employee on a live call.
-Answer the question implied by the conversation. Use THREE sources of truth:
-1. Headout's internal knowledge base (the CONTEXT below) — authoritative for Headout-specific facts.
-2. The user's live SCREEN text — authoritative for whatever is visible on screen right now.
-3. Your own general knowledge — to fill gaps and handle conceptual questions.
-Rules:
-- Be concise. Lead with the exact number or fact.
-- When a fact comes from the CONTEXT, cite the source.
-- When a Headout-specific fact (number, policy, SLA, price) is NOT in CONTEXT or SCREEN, say "I don't have that data — check with ops." Never invent it.
-- General/conceptual answers from your own knowledge are fine without a source.`
-
 let windowService: WindowService
+let modeService: ModeService
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.headout.nerd')
   app.on('browser-window-created', (_, win) => optimizer.watchWindowShortcuts(win))
 
   windowService = new WindowService()
+  modeService = new ModeService()
   const win = windowService.getWindow()
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -53,40 +49,50 @@ app.whenReady().then(() => {
   let currentRequestId = 0
   let currentAbortController: AbortController | null = null
 
+  // Window
   ipcMain.handle(IPC.SNAP_TO_CORNER, (_e, { corner }: SnapToCornerRequest) =>
     windowService.snapToCorner(corner)
   )
-  ipcMain.handle(IPC.LIST_MODES, () => [])
-  ipcMain.handle(IPC.SET_OUTPUT_FORMAT, (_e, fmt: OutputFormat) => {
-    outputFormat = fmt
-  })
-  ipcMain.handle(IPC.SET_ACTIVE_MODE, (_e, _req) => {
-    /* stub — ModeService lands in Slice 9 */
-  })
-  ipcMain.handle(IPC.START_AUDIO, () => {
-    /* stub */
-  })
-  ipcMain.handle(IPC.STOP_AUDIO, () => {
-    /* stub */
-  })
   ipcMain.handle(IPC.GET_COLLAPSED, () => windowService.isCollapsed())
   ipcMain.handle(IPC.SET_COLLAPSED, (_e, collapsed: boolean) =>
     windowService.setCollapsed(collapsed)
   )
   ipcMain.handle(IPC.SET_OPACITY, (_e, opacity: number) => windowService.setOpacity(opacity))
 
+  // Modes
+  ipcMain.handle(IPC.LIST_MODES, () => modeService.listModes())
+  ipcMain.handle(IPC.GET_ACTIVE_MODE, () => modeService.getActiveMode())
+  ipcMain.handle(IPC.SET_ACTIVE_MODE, (_e, { modeId }: SetActiveModeRequest) =>
+    modeService.setActiveMode(modeId)
+  )
+  ipcMain.handle(IPC.CREATE_MODE, (_e, { name, systemPrompt }: CreateModeRequest) =>
+    modeService.createMode(name, systemPrompt)
+  )
+  ipcMain.handle(IPC.UPDATE_MODE, (_e, { id, updates }: UpdateModeRequest) =>
+    modeService.updateMode(id, updates)
+  )
+  ipcMain.handle(IPC.DELETE_MODE, (_e, { id }: DeleteModeRequest) => modeService.deleteMode(id))
+
+  // Output format
+  ipcMain.handle(IPC.SET_OUTPUT_FORMAT, (_e, fmt: OutputFormat) => {
+    outputFormat = fmt
+  })
+
+  // Audio (stubs — AudioCaptureService lands in Slice 6)
+  ipcMain.handle(IPC.START_AUDIO, () => { /* stub */ })
+  ipcMain.handle(IPC.STOP_AUDIO, () => { /* stub */ })
+
+  // RAG — ask manually
   ipcMain.handle(IPC.ASK_MANUALLY, async (_e, { question }: AskManuallyRequest) => {
-    // Cancel previous in-flight request
     currentAbortController?.abort()
     const ac = new AbortController()
     currentAbortController = ac
     const requestId = String(++currentRequestId)
 
     const browserWin = windowService.getWindow()
-    const systemPrompt = DEFAULT_SYSTEM_PROMPT
+    const systemPrompt = modeService.getActiveSystemPrompt()
 
     try {
-      // Stage 1: rewrite
       let cleanQuestion: string
       try {
         cleanQuestion = await ragService.rewriteQuery(
@@ -94,12 +100,11 @@ app.whenReady().then(() => {
           AbortSignal.any([ac.signal, AbortSignal.timeout(250)])
         )
       } catch {
-        cleanQuestion = question // fall back to raw question on timeout
+        cleanQuestion = question
       }
 
       if (ac.signal.aborted) return
 
-      // Stage 2: embed
       let vector: number[]
       try {
         vector = await ragService.embedQuery(
@@ -118,7 +123,6 @@ app.whenReady().then(() => {
 
       if (ac.signal.aborted) return
 
-      // Stage 3: retrieve
       let chunks: Awaited<ReturnType<RAGService['retrieveChunks']>> = []
       try {
         chunks = await ragService.retrieveChunks(
@@ -126,13 +130,10 @@ app.whenReady().then(() => {
           cleanQuestion,
           AbortSignal.any([ac.signal, AbortSignal.timeout(500)])
         )
-      } catch {
-        /* use empty chunks */
-      }
+      } catch { /* use empty chunks */ }
 
       if (ac.signal.aborted) return
 
-      // Stage 4: rerank
       let reranked = chunks
       try {
         reranked = await ragService.rerankChunks(
@@ -146,19 +147,18 @@ app.whenReady().then(() => {
 
       if (ac.signal.aborted) return
 
-      // Stage 5: stream generation
-      const genSignal = AbortSignal.any([ac.signal, AbortSignal.timeout(8000)])
-      const genOpts = {
-        question: cleanQuestion,
-        chunks: reranked,
-        screenText: '', // populated in Slice 8
-        transcriptContext: question,
-        outputFormat,
-        systemPrompt,
-        requestId
-      }
-
-      for await (const token of ragService.generateAnswer(genOpts, genSignal)) {
+      for await (const token of ragService.generateAnswer(
+        {
+          question: cleanQuestion,
+          chunks: reranked,
+          screenText: '', // populated in Slice 8
+          transcriptContext: question,
+          outputFormat,
+          systemPrompt,
+          requestId
+        },
+        AbortSignal.any([ac.signal, AbortSignal.timeout(8000)])
+      )) {
         if (ac.signal.aborted) break
         browserWin.webContents.send(IPC.ON_ANSWER, token)
       }
@@ -174,13 +174,14 @@ app.whenReady().then(() => {
     }
   })
 
+  // Briefing
   ipcMain.handle(
     IPC.GENERATE_BRIEFING,
     async (_e, { meetingDescription }: GenerateBriefingRequest) => {
       try {
         const briefing = await briefingService.generateBriefing(
           meetingDescription,
-          DEFAULT_SYSTEM_PROMPT
+          modeService.getActiveSystemPrompt()
         )
         windowService.getWindow().webContents.send(IPC.ON_BRIEFING_READY, briefing)
       } catch (err) {

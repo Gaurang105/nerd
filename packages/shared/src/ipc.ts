@@ -14,6 +14,10 @@ export const IPC = {
   SET_OUTPUT_FORMAT: 'nerd:set-output-format',
   LIST_MODES: 'nerd:list-modes',
   SET_ACTIVE_MODE: 'nerd:set-active-mode',
+  GET_ACTIVE_MODE: 'nerd:get-active-mode',
+  CREATE_MODE: 'nerd:create-mode',
+  UPDATE_MODE: 'nerd:update-mode',
+  DELETE_MODE: 'nerd:delete-mode',
   SNAP_TO_CORNER: 'nerd:snap-to-corner',
   GENERATE_BRIEFING: 'nerd:generate-briefing',
   START_AUDIO: 'nerd:start-audio',
@@ -40,6 +44,20 @@ export interface SetActiveModeRequest {
   modeId: string
 }
 
+export interface CreateModeRequest {
+  name: string
+  systemPrompt: string
+}
+
+export interface UpdateModeRequest {
+  id: string
+  updates: Partial<Pick<Mode, 'name' | 'systemPrompt' | 'isDefault'>>
+}
+
+export interface DeleteModeRequest {
+  id: string
+}
+
 export interface SnapToCornerRequest {
   corner: Corner
 }
@@ -52,6 +70,10 @@ export interface IpcSignatures {
   [IPC.SET_OUTPUT_FORMAT]: { payload: OutputFormat; direction: 'renderer->main' }
   [IPC.LIST_MODES]: { payload: void; response: Mode[]; direction: 'renderer->main' }
   [IPC.SET_ACTIVE_MODE]: { payload: SetActiveModeRequest; direction: 'renderer->main' }
+  [IPC.GET_ACTIVE_MODE]: { payload: void; response: Mode; direction: 'renderer->main' }
+  [IPC.CREATE_MODE]: { payload: CreateModeRequest; response: Mode; direction: 'renderer->main' }
+  [IPC.UPDATE_MODE]: { payload: UpdateModeRequest; response: Mode; direction: 'renderer->main' }
+  [IPC.DELETE_MODE]: { payload: DeleteModeRequest; direction: 'renderer->main' }
   [IPC.SNAP_TO_CORNER]: { payload: SnapToCornerRequest; direction: 'renderer->main' }
   [IPC.GENERATE_BRIEFING]: { payload: GenerateBriefingRequest; direction: 'renderer->main' }
   [IPC.START_AUDIO]: { payload: void; direction: 'renderer->main' }

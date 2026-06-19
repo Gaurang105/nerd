@@ -12,7 +12,14 @@ import type {
 export interface NerdApi {
   snapToCorner: (corner: Corner) => Promise<void>
   listModes: () => Promise<Mode[]>
+  getActiveMode: () => Promise<Mode>
   setActiveMode: (modeId: string) => Promise<void>
+  createMode: (name: string, systemPrompt: string) => Promise<Mode>
+  updateMode: (
+    id: string,
+    updates: Partial<Pick<Mode, 'name' | 'systemPrompt' | 'isDefault'>>
+  ) => Promise<Mode>
+  deleteMode: (id: string) => Promise<void>
   setOutputFormat: (fmt: OutputFormat) => Promise<void>
   askManually: (req: AskManuallyRequest) => Promise<void>
   generateBriefing: (req: GenerateBriefingRequest) => Promise<void>

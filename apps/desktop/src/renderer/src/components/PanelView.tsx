@@ -2,6 +2,7 @@ import type { Corner } from '@nerd/shared'
 import { ManualInputBar } from './ManualInputBar'
 import { AnswerPanel } from './AnswerPanel'
 import { BriefingCard } from './BriefingCard'
+import { ModeSelector } from './ModeSelector'
 
 interface PanelViewProps {
   onCollapse: () => void
@@ -19,6 +20,7 @@ export function PanelView({ onCollapse }: PanelViewProps): React.JSX.Element {
     <div className="panel">
       <div className="panel-header">
         <span className="panel-name">Nerd</span>
+        <ModeSelector />
         {CORNERS.map(({ corner, glyph, label }) => (
           <button
             key={corner}
