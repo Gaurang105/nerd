@@ -1,0 +1,24 @@
+{
+  "name": "@nerd/chunker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Paragraph-aware chunker — ~400 token chunks, ~50 token overlap",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nerd/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

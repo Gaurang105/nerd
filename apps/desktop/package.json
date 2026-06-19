@@ -1,0 +1,40 @@
+{
+  "name": "@nerd/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nerd Electron desktop app — floating overlay, RAG, audio, briefing",
+  "main": "./out/main/index.js",
+  "author": "headout",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "pnpm typecheck && electron-vite build",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:win": "pnpm build && electron-builder --win",
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:unpack": "pnpm build && electron-builder --dir",
+    "start": "electron-vite preview",
+    "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@nerd/shared": "workspace:*",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "^22.19.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "vite": "^7.2.6"
+  }
+}

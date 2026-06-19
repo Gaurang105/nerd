@@ -1,0 +1,25 @@
+{
+  "name": "@nerd/sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nerd EC2 cron — differential sync from data sources into Qdrant + Supabase",
+  "type": "module",
+  "main": "./dist/cron.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/cron.js",
+    "dev": "tsx watch src/cron.ts"
+  },
+  "dependencies": {
+    "@nerd/chunker": "workspace:*",
+    "@nerd/rag-clients": "workspace:*",
+    "@nerd/shared": "workspace:*",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}
