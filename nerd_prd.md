@@ -86,7 +86,7 @@ The same product serves senior and junior via the **output format** (pointers vs
 
 ### 6.1 Behaviour
 - nerd renders as a **floating, always-on-top window** independent of any meeting app.
-- It can be **docked to a screen corner**: top-left, top-right, bottom-right (and bottom-left). **[Assumption]** Bottom-left added for symmetry; confirm if you want only the three you named.
+- It can be **docked to any of the four screen corners**: top-left, top-right, bottom-left, bottom-right.
 - **Keyboard control:** `⌘ + Arrow` (Cmd + ↑/←/→/↓) snaps the widget to the corresponding corner. Arrow icons in the widget header offer the same via click.
 - Widget has two primary states:
   - **Collapsed** — a compact pill / icon (minimal footprint, just shows nerd is live).
@@ -94,7 +94,7 @@ The same product serves senior and junior via the **output format** (pointers vs
 
 ### 6.2 Appearance customization (set pre-meeting)
 - **Background transparency / translucency** — slider from solid → frosted/translucent → near-transparent.
-- **[Assumption]** Also expose: blur amount, light/dark theme, font size, and panel accent. These are cheap and make the overlay readable against varied backgrounds.
+- Also expose: blur amount, light/dark theme, font size, and panel accent — these make the overlay readable against varied backgrounds.
 - Appearance changes are **live-previewable** in settings, not changed mid-meeting.
 
 ### 6.3 Resize & reposition (live)
@@ -102,7 +102,7 @@ The same product serves senior and junior via the **output format** (pointers vs
 - **Drag the body** to move the widget anywhere on screen (free position; snaps to corners when near one).
 - **Drag edges/corners** to resize: left↔right to widen, top↕bottom to grow taller.
 - The **answer content reflows** to fill whatever size the user sets — the user is sizing the *reading space*, and content fills it.
-- Last position + size persist per session. **[Assumption]**
+- Last position + size persist per session.
 
 ---
 
@@ -191,7 +191,7 @@ This is a structural rule, not a nice-to-have:
 | F7 | List vs. paragraph output toggle | P0 |
 | F8 | Drag-to-move, hover handles, edge/corner resize with content reflow | P0 |
 | F9 | Manual typed query | P0 |
-| F10 | Global synced knowledge base (Slack, Notion, GitHub, Google Docs, Pitch) | P1 |
+| F10 | Global synced knowledge base (Slack — all BizOps + Dex channels) | P1 |
 | F11 | Knowledge base kept current via scheduled sync | P1 |
 | F12 | Appearance: transparency/translucency (+ theme, blur, font size) | P1 |
 | F13 | Audio capture (mic + system audio) for live transcription | P0 |
@@ -212,7 +212,7 @@ Because nerd captures the **counterparty's** voice and the user's screen, this s
 
 - **Recording/consent:** Capturing another party's audio has legal/consent implications that vary by region. Define whether nerd ever *stores* audio/transcript vs. processes ephemerally. **Default to ephemeral, in-session only.** **[Open]** legal review + consent policy.
 - **Hidden mode ethics:** It is invisible to the *screen-share view*, not a covert recorder. Be explicit internally about the boundary; this is a recall aid, not surveillance.
-- **Data handling:** Slack/Drive/internal metrics are sensitive. Scope access appropriately, encrypt at rest/in transit, and don't leak the knowledge base across unauthorized users.
+- **Data handling:** Slack (all indexed channels) is sensitive internal data. Scope access appropriately, encrypt at rest/in transit, and don't leak the knowledge base across unauthorized users.
 - **Indicator:** the user must always know whether nerd is hidden or visible, capturing audio or not.
 - **[Open]** Retention policy, admin controls, and which internal data sources are sanctioned for v1.
 
@@ -232,21 +232,20 @@ Because nerd captures the **counterparty's** voice and the user's screen, this s
 - **% of counterparty questions answered confidently** (user-rated thumbs / post-meeting).
 - **Stall rate reduction** ("let me get back to you") vs. baseline.
 - **Adoption:** weekly active Ops users; meetings with nerd attached.
-- **Downstream:** partner activation / deal-progression lift for nerd-assisted meetings. **[Assumption]** harder to attribute; track directionally.
+- **Downstream:** partner activation / deal-progression lift for nerd-assisted meetings — harder to attribute; track directionally.
 
 ---
 
 ## 15. Assumptions & open questions (consolidated)
-**Assumptions**
+**Assumptions / decisions**
 - Desktop-only (macOS + Windows) for v1.
-- Bottom-left corner included alongside the three named.
-- "decks space" = internal metrics/dashboards; appearance extras (theme/blur/font) included.
-- Ephemeral, in-session processing by default.
+- All four corners supported for docking (top-left, top-right, bottom-left, bottom-right) via `⌘+Arrow` and header icons.
+- Appearance customization covers transparency plus theme, blur, and font size.
+- No audio or transcript is persisted — everything is processed in memory during the session and discarded after.
+- Data source for v1 is Slack only (all BizOps + Dex channels) — see the ERD.
 
 **Open**
-- Sanctioned internal data sources for v1 (Mixpanel? internal BI? Slides?).
-- Consent + retention + admin policy (legal).
-- Hidden/visible indicator design.
+- Hidden/visible indicator design — the exact look of the local-only badge (§7.1) that tells the user whether nerd is currently hidden from screen-share.
 
 ---
 
@@ -255,7 +254,7 @@ Because nerd captures the **counterparty's** voice and the user's screen, this s
 | Phase | Scope |
 |---|---|
 | **P0 — MVP** | Floating widget + corner snapping, screen capture, **hidden mode**, live transcription + speaker separation, audio capture (mic + system), hotkey-triggered grounded answers, list/paragraph toggle, move/resize, manual query. |
-| **P1 — Data** | Global synced knowledge base (Slack, Notion, GitHub, Google Docs, Pitch) with scheduled refresh, appearance customization. |
+| **P1 — Data** | Global synced knowledge base (Slack — all BizOps + Dex channels) with scheduled refresh, appearance customization. |
 | **P2 — Automation** | Persisted layout, analytics/success-metric instrumentation. |
 
 ---
