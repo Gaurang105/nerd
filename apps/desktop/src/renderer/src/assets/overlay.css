@@ -16,3 +16,9 @@ body { background: transparent; overflow: hidden; font-family: -apple-system, Bl
 .panel-input-bar { padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.06); }
 .panel-input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-size: 12px; padding: 7px 10px; outline: none; }
 .panel-input::placeholder { color: rgba(255,255,255,0.3); }
+.mode-selector-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 10px; padding: 2px 6px; white-space: nowrap; }
+.mode-selector-btn:hover { background: rgba(255,255,255,0.13); color: white; }
+.mode-dropdown { position: absolute; top: calc(100% + 4px); left: 0; background: rgba(20,20,22,0.97); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; min-width: 140px; overflow: hidden; z-index: 100; backdrop-filter: blur(12px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+.mode-option { display: block; width: 100%; background: none; border: none; color: rgba(255,255,255,0.75); cursor: pointer; font-size: 11px; padding: 7px 12px; text-align: left; }
+.mode-option:hover { background: rgba(255,255,255,0.08); color: white; }
+.mode-option--active { color: white; font-weight: 500; }

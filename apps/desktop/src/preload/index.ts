@@ -15,8 +15,16 @@ const nerd = {
   snapToCorner: (corner: Corner): Promise<void> =>
     ipcRenderer.invoke(IPC.SNAP_TO_CORNER, { corner }),
   listModes: (): Promise<Mode[]> => ipcRenderer.invoke(IPC.LIST_MODES),
+  getActiveMode: (): Promise<Mode> => ipcRenderer.invoke(IPC.GET_ACTIVE_MODE),
   setActiveMode: (modeId: string): Promise<void> =>
     ipcRenderer.invoke(IPC.SET_ACTIVE_MODE, { modeId }),
+  createMode: (name: string, systemPrompt: string): Promise<Mode> =>
+    ipcRenderer.invoke(IPC.CREATE_MODE, { name, systemPrompt }),
+  updateMode: (
+    id: string,
+    updates: Partial<Pick<Mode, 'name' | 'systemPrompt' | 'isDefault'>>
+  ): Promise<Mode> => ipcRenderer.invoke(IPC.UPDATE_MODE, { id, updates }),
+  deleteMode: (id: string): Promise<void> => ipcRenderer.invoke(IPC.DELETE_MODE, { id }),
   setOutputFormat: (fmt: OutputFormat): Promise<void> =>
     ipcRenderer.invoke(IPC.SET_OUTPUT_FORMAT, fmt),
   askManually: (req: AskManuallyRequest): Promise<void> =>
