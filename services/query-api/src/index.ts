@@ -1,3 +1,4 @@
+import 'dotenv/config' // load services/query-api/.env (QDRANT_URL, QDRANT_API_KEY, ...) into process.env
 import Fastify from 'fastify'
 import { healthRoute } from './routes/health.js'
 import { sqlRoute } from './routes/sql.js'

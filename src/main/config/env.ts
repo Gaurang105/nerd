@@ -9,9 +9,9 @@ function required(key: string): string {
 }
 
 export const ENV = {
-  qdrantUrl: required('MAIN_VITE_QDRANT_URL'),
-  qdrantApiKey: env.MAIN_VITE_QDRANT_API_KEY || undefined,
-  databaseUrl: required('MAIN_VITE_DATABASE_URL'),
+  // Single gateway service (Node + ngrok) that fronts Postgres (/sql) and Qdrant (/search).
+  // The app no longer connects to either DB directly — it calls this URL.
+  gatewayUrl: required('MAIN_VITE_GATEWAY_URL'),
   openaiApiKey: required('MAIN_VITE_OPENAI_API_KEY'),
   cohereApiKey: required('MAIN_VITE_COHERE_API_KEY'),
   deepgramApiKey: required('MAIN_VITE_DEEPGRAM_API_KEY'),
