@@ -1,5 +1,8 @@
 import OpenAI from 'openai'
+import type { ChatTurn } from '@shared/types'
 import { ENV } from '../config/env'
+import { assembleToolCalls } from './sqlTool-core'
+import { MAX_HISTORY_TURNS } from '@shared/history'
 
 let client: OpenAI | null = null
 function oai(): OpenAI {
@@ -57,6 +60,75 @@ export async function* generate(
   for await (const part of stream) {
     const delta = part.choices[0]?.delta?.content
     if (delta) yield delta
+  }
+}
+
+export type ToolExecutor = (name: string, args: string, signal?: AbortSignal) => Promise<string>
+
+const MAX_TOOL_ROUNDS = 3
+
+/**
+ * Streams generated text deltas while letting the model call `tools` mid-turn. Tool-call
+ * turns produce no user-facing content, so we only yield real answer text. The final round
+ * forces `tool_choice: 'none'` so the loop always terminates with an answer.
+ */
+export async function* generateWithTools(
+  system: string,
+  user: string,
+  history: ChatTurn[],
+  tools: OpenAI.Chat.Completions.ChatCompletionTool[],
+  exec: ToolExecutor,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  // Defensive cap: the renderer already trims, but never let history outgrow the budget.
+  const recent = history.slice(-MAX_HISTORY_TURNS * 2)
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: 'system', content: system },
+    ...recent.map((t) => ({ role: t.role, content: t.content })),
+    { role: 'user', content: user }
+  ]
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const tool_choice: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption =
+      round < MAX_TOOL_ROUNDS ? 'auto' : 'none'
+    const stream = await oai().chat.completions.create(
+      { model: ENV.genModel, stream: true, messages, tools, tool_choice },
+      { signal }
+    )
+
+    const toolDeltas: OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta.ToolCall[] = []
+    let finish: string | null = null
+    let content = ''
+    for await (const part of stream) {
+      const choice = part.choices[0]
+      if (!choice) continue
+      if (choice.delta.content) {
+        content += choice.delta.content
+        yield choice.delta.content
+      }
+      if (choice.delta.tool_calls) toolDeltas.push(...choice.delta.tool_calls)
+      if (choice.finish_reason) finish = choice.finish_reason
+    }
+
+    if (finish !== 'tool_calls') return
+
+    const calls = assembleToolCalls(toolDeltas)
+    messages.push({
+      role: 'assistant',
+      content: content || null,
+      tool_calls: calls.map((c) => ({
+        id: c.id,
+        type: 'function',
+        function: { name: c.name, arguments: c.arguments }
+      }))
+    })
+    for (const c of calls) {
+      messages.push({
+        role: 'tool',
+        tool_call_id: c.id,
+        content: await exec(c.name, c.arguments, signal)
+      })
+    }
   }
 }
 

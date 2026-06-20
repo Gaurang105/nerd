@@ -18,8 +18,10 @@ export const ENV = {
   genModel: env.MAIN_VITE_GEN_MODEL || 'gpt-5.5',
   rewriteModel: env.MAIN_VITE_REWRITE_MODEL || 'gpt-5.4-mini',
   embedModel: env.MAIN_VITE_EMBED_MODEL || 'text-embedding-3-small',
-  rerankModel: env.MAIN_VITE_RERANK_MODEL || 'rerank-3.5',
+  rerankModel: env.MAIN_VITE_RERANK_MODEL || 'rerank-v4.0-fast',
   transcribeModel: env.MAIN_VITE_TRANSCRIBE_MODEL || 'nova-3',
+  // 'multi' enables Hindi/English code-switching on nova-3; 'en' forces English-only.
+  transcribeLanguage: env.MAIN_VITE_TRANSCRIBE_LANGUAGE || 'multi',
   // HyDE: embed a hypothetical answer instead of the question (better recall, +1 LLM call).
   useHyde: env.MAIN_VITE_USE_HYDE === 'true'
 }

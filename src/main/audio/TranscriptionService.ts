@@ -36,7 +36,7 @@ export class TranscriptionService {
       const socket = await this.client.listen.v1.connect({
         Authorization: `Token ${ENV.deepgramApiKey}`,
         model: ENV.transcribeModel,
-        language: 'en',
+        language: ENV.transcribeLanguage,
         encoding: 'linear16',
         sample_rate: 16000,
         channels: 1,

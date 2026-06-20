@@ -8,6 +8,7 @@ import { TranscriptionService } from './audio/TranscriptionService'
 import { HotkeyService } from './hotkey/HotkeyService'
 import { transcripts } from './audio/transcriptBuffer'
 import { CH } from './ipc/channels'
+import { getSchema } from './services/sqlTool'
 
 // Must run before app is ready (registers loopback feature flags + IPC handlers).
 initAudioLoopback()
@@ -36,6 +37,9 @@ app.whenReady().then(() => {
   new HotkeyService(coordinator).register()
 
   registerIpc({ getWindows: () => windows as WindowService, coordinator, transcription })
+
+  // Warm the DB schema cache so the first question doesn't pay introspection latency.
+  void getSchema().catch(() => {})
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

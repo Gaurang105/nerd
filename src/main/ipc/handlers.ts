@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type {
   Appearance,
+  ChatTurn,
   Corner,
   Mode,
   OutputFormat,
@@ -32,8 +33,10 @@ export function registerIpc({ getWindows, coordinator, transcription }: Deps): v
   }
 
   // ---- Answers (manual + shared coordinator) ----
-  ipcMain.handle(CH.answerAsk, (_e, question: string, format: OutputFormat): number =>
-    coordinator.run({ question, format, rewrite: false })
+  ipcMain.handle(
+    CH.answerAsk,
+    (_e, question: string, format: OutputFormat, history: ChatTurn[] = []): number =>
+      coordinator.run({ question, format, rewrite: false, history })
   )
   ipcMain.handle(CH.setFormat, (_e, format: OutputFormat) => saveSettings({ format }))
 

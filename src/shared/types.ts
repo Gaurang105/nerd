@@ -77,11 +77,28 @@ export interface RetrievedChunk {
   pinned?: boolean
 }
 
+/** One prior conversation turn replayed to the model for follow-up context. */
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 /** Source shown next to an answer for citation. */
 export interface AnswerSource {
   docTitle: string
   url: string
   source: string
+}
+
+/** A query_database result rendered deterministically by the app (not retyped by the model). */
+export interface SqlResult {
+  sql: string
+  columns: string[]
+  /** Rows for display, capped; see `rowCount` for the true total. */
+  rows: Record<string, unknown>[]
+  rowCount: number
+  /** true when `rowCount` exceeds the displayed `rows`. */
+  truncated: boolean
 }
 
 export interface AnticipatedQuestion {
@@ -104,6 +121,12 @@ export interface PartialAnswer {
   delta: string
 }
 
+/** Transient progress note shown while an answer is being produced (e.g. running SQL). */
+export interface StatusEvent {
+  requestId: number
+  text: string
+}
+
 /** Terminal answer event for a request. */
 export interface FinalAnswer {
   requestId: number
@@ -112,6 +135,8 @@ export interface FinalAnswer {
   /** true => grounded in internal KB; false => general knowledge. */
   grounded: boolean
   format: OutputFormat
+  /** Structured results from query_database calls, rendered as tables by the renderer. */
+  data?: SqlResult[]
   error?: string
 }
 
@@ -124,10 +149,11 @@ export interface SyncStatus {
 export interface NerdAPI {
   // Briefing + Q&A
   runBriefing: (description: string) => Promise<void>
-  askManually: (question: string, format: OutputFormat) => Promise<number>
+  askManually: (question: string, format: OutputFormat, history?: ChatTurn[]) => Promise<number>
   setOutputFormat: (format: OutputFormat) => Promise<void>
   // Streaming subscriptions (return an unsubscribe fn)
   onPartialAnswer: (cb: (p: PartialAnswer) => void) => () => void
+  onAnswerStatus: (cb: (s: StatusEvent) => void) => () => void
   onAnswer: (cb: (a: FinalAnswer) => void) => () => void
   onBriefingReady: (cb: (b: BriefingResult) => void) => () => void
   // Window shell

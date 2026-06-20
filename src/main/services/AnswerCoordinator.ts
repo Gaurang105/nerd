@@ -26,7 +26,8 @@ export class AnswerCoordinator {
       ...opts,
       requestId,
       signal: ac.signal,
-      onDelta: (p: PartialAnswer) => this.send(CH.answerPartial, p)
+      onDelta: (p: PartialAnswer) => this.send(CH.answerPartial, p),
+      onStatus: (s) => this.send(CH.answerStatus, s)
     }).then((final: FinalAnswer) => {
       if (this.current === ac) this.current = null
       if (final.text && !final.error) transcripts.addAnswer(final.text)

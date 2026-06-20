@@ -4,6 +4,7 @@ export const CH = {
   briefingReady: 'briefing:ready',
   answerAsk: 'answer:ask',
   answerPartial: 'answer:partial',
+  answerStatus: 'answer:status',
   answerFinal: 'answer:final',
   setFormat: 'answer:setFormat',
   windowSnap: 'window:snap',

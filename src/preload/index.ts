@@ -11,6 +11,7 @@ import type {
   PartialAnswer,
   Settings,
   ShortcutAction,
+  StatusEvent,
   SyncStatus,
   TranscriptTurn
 } from '@shared/types'
@@ -24,9 +25,11 @@ function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
 
 const nerd: NerdAPI = {
   runBriefing: (description) => ipcRenderer.invoke(CH.briefingRun, description),
-  askManually: (question, format) => ipcRenderer.invoke(CH.answerAsk, question, format),
+  askManually: (question, format, history) =>
+    ipcRenderer.invoke(CH.answerAsk, question, format, history),
   setOutputFormat: (format: OutputFormat) => ipcRenderer.invoke(CH.setFormat, format),
   onPartialAnswer: (cb) => subscribe<PartialAnswer>(CH.answerPartial, cb),
+  onAnswerStatus: (cb) => subscribe<StatusEvent>(CH.answerStatus, cb),
   onAnswer: (cb) => subscribe<FinalAnswer>(CH.answerFinal, cb),
   onBriefingReady: (cb) => subscribe<BriefingResult>(CH.briefingReady, cb),
   snapToCorner: (corner: Corner) => ipcRenderer.invoke(CH.windowSnap, corner),

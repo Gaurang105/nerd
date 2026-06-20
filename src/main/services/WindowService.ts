@@ -9,6 +9,7 @@ import { CH } from '../ipc/channels'
 const PILL = { width: 220, height: 56 }
 const DEFAULT_PANEL = { width: 420, height: 560 }
 const MARGIN = 16
+const NUDGE_STEP = 70 // px per cmd+arrow press
 
 export class WindowService {
   readonly win: BrowserWindow
@@ -105,16 +106,17 @@ export class WindowService {
   }
 
   registerShortcuts(): void {
-    const map: Record<string, Corner> = {
-      'CommandOrControl+Up': 'top-left',
-      'CommandOrControl+Left': 'bottom-left',
-      'CommandOrControl+Right': 'top-right',
-      'CommandOrControl+Down': 'bottom-right'
+    const map: Record<string, [number, number]> = {
+      'CommandOrControl+Up': [0, -NUDGE_STEP],
+      'CommandOrControl+Down': [0, NUDGE_STEP],
+      'CommandOrControl+Left': [-NUDGE_STEP, 0],
+      'CommandOrControl+Right': [NUDGE_STEP, 0]
     }
-    // ponytail: arrows map to the nearest sensible corner; Up/Down pick the side,
-    // Left/Right pick the other. Header icons in the UI cover all four explicitly.
-    for (const [accel, corner] of Object.entries(map)) {
-      globalShortcut.register(accel, () => this.snapToCorner(corner))
+    // ponytail: arrows nudge the overlay one step in their direction; holding a key
+    // lets the OS auto-repeat for smooth continuous movement. Header icons in the UI
+    // still snap to all four corners explicitly.
+    for (const [accel, [dx, dy]] of Object.entries(map)) {
+      globalShortcut.register(accel, () => this.nudge(dx, dy))
     }
     this.applyConfiguredShortcuts()
   }
@@ -155,6 +157,15 @@ export class WindowService {
     if (this.win.isDestroyed()) return
     if (this.win.isVisible()) this.win.hide()
     else this.win.show()
+  }
+
+  nudge(dx: number, dy: number): void {
+    const b = this.win.getBounds()
+    const wa = screen.getDisplayNearestPoint(b).workArea
+    const x = Math.min(Math.max(b.x + dx, wa.x + MARGIN), wa.x + wa.width - b.width - MARGIN)
+    const y = Math.min(Math.max(b.y + dy, wa.y + MARGIN), wa.y + wa.height - b.height - MARGIN)
+    this.win.setPosition(Math.round(x), Math.round(y))
+    this.schedulePersist()
   }
 
   snapToCorner(corner: Corner): void {

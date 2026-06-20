@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Mode, OutputFormat, ShortcutAction, TranscriptTurn } from '@shared/types'
+import { buildHistory } from '@shared/history'
 import Toolbar from './components/Toolbar'
 import ChatThread, { type QATurn } from './components/ChatThread'
 import ModeDropdown from './components/ModeDropdown'
@@ -42,11 +43,14 @@ function App(): React.JSX.Element {
   const [question, setQuestion] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [answerText, setAnswerText] = useState('')
+  const [status, setStatus] = useState('')
   const [streaming, setStreaming] = useState(false)
   const reqId = useRef(0)
   // Mirror the in-flight Q&A so the (once-registered) onAnswer handler can archive it.
   const questionRef = useRef<string | null>(null)
   const answerRef = useRef('')
+  // Mirror completed turns so ask() (incl. the stale-closure cmd+Enter handler) reads the latest.
+  const historyRef = useRef<QATurn[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   useFitWindow(overlayRef, null)
@@ -54,6 +58,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     questionRef.current = question
     answerRef.current = answerText
+    historyRef.current = history
   })
 
   useEffect(() => {
@@ -68,12 +73,17 @@ function App(): React.JSX.Element {
         setStreaming(true)
         setModesOpen(false)
       }
+      setStatus('')
       setAnswerText((t) => t + p.delta)
+    })
+    const offStatus = window.nerd.onAnswerStatus((s) => {
+      if (s.requestId >= reqId.current) setStatus(s.text)
     })
     const offAnswer = window.nerd.onAnswer((a) => {
       if (a.requestId < reqId.current) return
       reqId.current = a.requestId
       setStreaming(false)
+      setStatus('')
       if (a.error === 'cancelled') return
       // Archive the finished turn into history and clear the in-flight fields.
       setHistory((h) => [
@@ -92,6 +102,7 @@ function App(): React.JSX.Element {
     const offCollapsed = window.nerd.onCollapsedChanged(setCollapsed)
     return () => {
       offPartial()
+      offStatus()
       offAnswer()
       offTranscript()
       offCollapsed()
@@ -108,9 +119,17 @@ function App(): React.JSX.Element {
   const ask = async (q: string, label?: string): Promise<void> => {
     setQuestion(label ?? q)
     setAnswerText('')
+    setStatus('')
     setStreaming(true)
     setModesOpen(false)
-    reqId.current = await window.nerd.askManually(q, format)
+    const history = buildHistory(
+      historyRef.current.map((t) => ({
+        question: t.question,
+        answer: t.answer,
+        error: t.final?.error
+      }))
+    )
+    reqId.current = await window.nerd.askManually(q, format, history)
   }
 
   const submitDraft = (): void => {
@@ -131,6 +150,7 @@ function App(): React.JSX.Element {
     setHistory([])
     setQuestion(null)
     setAnswerText('')
+    setStatus('')
     setStreaming(false)
     setDraft('')
     setComposerOpen(false)
@@ -260,7 +280,12 @@ function App(): React.JSX.Element {
       {(hasThread || composerOpen) && (
         <div className="nerd-body">
           {hasThread && (
-            <ChatThread turns={qaTurns} transcript={transcript} showTranscript={showTranscript} />
+            <ChatThread
+              turns={qaTurns}
+              transcript={transcript}
+              showTranscript={showTranscript}
+              status={status}
+            />
           )}
           {composerOpen && (
             <div className="nerd-composer">

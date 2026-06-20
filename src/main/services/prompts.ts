@@ -7,24 +7,28 @@ export const DEFAULT_SYSTEM_PROMPT = `You are Nerd, a real-time assistant for a 
 The user just asked a question. Below is the recent context, retrieved context from
 Headout's internal knowledge base, and the text currently visible on the user's screen.
 
-Answer the question. Use THREE sources of truth:
-1. Headout's internal knowledge base (the CONTEXT below) — authoritative for
-   Headout-specific facts: numbers, SLAs, pricing, policies, names. Always prefer it.
-2. The user's live SCREEN text below — authoritative for whatever is on screen right now.
-3. Your own general knowledge — to fill gaps, explain concepts, or answer anything the
-   CONTEXT and SCREEN do not cover.
+Answer the question. Use FOUR sources of truth:
+1. The DATABASE (via the query_database tool) — authoritative for structured/operational
+   data: counts, lists, filters, date ranges. Prefer it for any "how many / which / list" question.
+2. Headout's internal knowledge base (the CONTEXT below) — authoritative for
+   Headout-specific facts: numbers, SLAs, pricing, policies, names.
+3. The user's live SCREEN text below — authoritative for whatever is on screen right now.
+4. Your own general knowledge — to fill gaps, explain concepts, or answer anything the
+   others do not cover.
 
 Rules:
 - Be concise. Lead with the exact number or fact.
-- When a fact comes from the CONTEXT, cite the source.
-- When a Headout-specific fact (a number, policy, SLA, price) is NOT in the CONTEXT or
-  SCREEN, do NOT invent it — say "I don't have that data — check with ops."
-- General/conceptual answers from your own knowledge are fine without a source, but make
-  clear they are general guidance, not Headout's confirmed data.`
+- Attribute every fact to its source: DB query, CONTEXT (cite it), SCREEN, or say plainly
+  it is general knowledge. Never blend a real Headout number with an invented one.
+- When a Headout-specific fact (a number, policy, SLA, price) is NOT in the DATABASE,
+  CONTEXT, or SCREEN, do NOT invent it — say "I don't have that data — check with ops."
+- General/conceptual answers from your own knowledge are fine, but make clear they are
+  general guidance, not Headout's confirmed data.`
 
 export function formatInstruction(format: OutputFormat): string {
   return format === 'list'
-    ? 'Answer as terse bullets — just the number/hook.'
+    ? 'Answer as a bullet list: one item per line, each line starting with "- ". Keep each ' +
+        'bullet terse — just the number/hook. Never put multiple items on one line.'
     : 'Answer as fully paraphrased, ready-to-speak prose.'
 }
 
@@ -44,6 +48,8 @@ export interface UserPromptParts {
   transcript?: string
   /** RECENT ANSWERS block to avoid repetition. */
   answerMemory?: string
+  /** Compact public-schema description; enables the query_database tool. */
+  schema?: string
 }
 
 export function buildUserPrompt({
@@ -52,12 +58,16 @@ export function buildUserPrompt({
   format,
   screenText = '(none)',
   transcript = '(none)',
-  answerMemory = '(none)'
+  answerMemory = '(none)',
+  schema = ''
 }: UserPromptParts): string {
   return `${formatInstruction(format)}
 
 CONTEXT:
 ${contextBlock(chunks)}
+
+DATABASE (use the query_database tool for structured questions — filters, counts, aggregations, date ranges; prefer it over CONTEXT for those. The app renders the returned rows as a table for the user, so do NOT list or re-type the rows yourself — give only a brief summary, e.g. the count or a notable insight. Tables:):
+${schema || '(unavailable)'}
 
 SCREEN (live, on user's display right now):
 ${screenText || '(none)'}

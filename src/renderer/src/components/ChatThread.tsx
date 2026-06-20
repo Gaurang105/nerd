@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { FinalAnswer, TranscriptTurn } from '@shared/types'
+import type { FinalAnswer, SqlResult, TranscriptTurn } from '@shared/types'
 import { PersonIcon, ArrowUpIcon } from './icons'
 
 export interface QATurn {
@@ -13,9 +13,53 @@ interface Props {
   turns: QATurn[]
   transcript: TranscriptTurn[]
   showTranscript: boolean
+  /** Transient progress note for the in-flight turn (e.g. "Querying database…"). */
+  status?: string
 }
 
-function ChatThread({ turns, transcript, showTranscript }: Props): React.JSX.Element {
+function cell(value: unknown): string {
+  if (value == null) return ''
+  return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
+/** Render a query_database result as a real table, straight from the DB rows. */
+function SqlTable({ result }: { result: SqlResult }): React.JSX.Element {
+  const { sql, columns, rows, rowCount, truncated } = result
+  return (
+    <div className="sql-result">
+      <details className="sql-query">
+        <summary>
+          {truncated ? `Showing ${rows.length} of ${rowCount} rows` : `${rowCount} rows`}
+        </summary>
+        <pre>{sql}</pre>
+      </details>
+      {columns.length > 0 && (
+        <div className="sql-table-wrap">
+          <table className="sql-table">
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <th key={c}>{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  {columns.map((c) => (
+                    <td key={c}>{cell(r[c])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChatThread({ turns, transcript, showTranscript, status }: Props): React.JSX.Element {
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrolled, setScrolled] = useState(false)
@@ -65,10 +109,14 @@ function ChatThread({ turns, transcript, showTranscript }: Props): React.JSX.Ele
                 <div className="msg ai">
                   <PersonIcon size={16} className="msg-avatar" />
                   <div className="ai-content">
+                    {turn.streaming && !turn.answer && status && (
+                      <p className="status">{status}</p>
+                    )}
                     <p>
                       {turn.answer}
                       {turn.streaming && <span className="caret" />}
                     </p>
+                    {turn.final?.data?.map((r, k) => <SqlTable key={k} result={r} />)}
                     {turn.final && !turn.final.error && turn.final.sources.length > 0 && (
                       <div className="sources">
                         Sources:{' '}

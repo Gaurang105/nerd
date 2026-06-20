@@ -119,6 +119,10 @@
 .msg.ai p {
   color: var(--nerd-fg);
 }
+.msg.ai .ai-content p {
+  /* Preserve newlines so bulleted/multi-line answers render as separate lines. */
+  white-space: pre-wrap;
+}
 .msg.ai p.err {
   color: #ff8585;
 }
@@ -137,6 +141,54 @@
   font-style: italic;
 }
 
+.ai-content .status {
+  color: var(--nerd-muted);
+  font-style: italic;
+}
+.sql-result {
+  margin-top: 8px;
+}
+.sql-result .sql-query {
+  font-size: 12px;
+  color: var(--nerd-muted);
+  margin-bottom: 4px;
+}
+.sql-result .sql-query summary {
+  cursor: pointer;
+}
+.sql-result .sql-query pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--nerd-bubble);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+.sql-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--nerd-bubble);
+  border-radius: 4px;
+}
+.sql-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+.sql-table th,
+.sql-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--nerd-bubble);
+  white-space: nowrap;
+}
+.sql-table th {
+  position: sticky;
+  top: 0;
+  background: var(--nerd-bubble);
+  color: var(--nerd-fg);
+  font-weight: 600;
+}
 .ai-content .sources {
   margin-top: 6px;
   font-size: 12px;
