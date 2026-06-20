@@ -1,70 +1,72 @@
 import { useEffect, useRef, useState } from 'react'
-import type {
-  Appearance,
-  BriefingResult,
-  Corner,
-  FinalAnswer,
-  Mode,
-  OutputFormat,
-  TranscriptTurn
-} from '@shared/types'
-import { DEFAULT_APPEARANCE } from '@shared/types'
-import WidgetHeader from './components/WidgetHeader'
-import BriefingCard from './components/BriefingCard'
-import AnswerPanel from './components/AnswerPanel'
-import ManualInputBar from './components/ManualInputBar'
-import ConfigPanel from './components/ConfigPanel'
-import ModesPanel from './components/ModesPanel'
-import TranscriptFeed from './components/TranscriptFeed'
+import type { Mode, OutputFormat, ShortcutAction, TranscriptTurn } from '@shared/types'
+import Toolbar from './components/Toolbar'
+import ChatThread, { type QATurn } from './components/ChatThread'
+import ModeDropdown from './components/ModeDropdown'
+import Settings, { type Tab } from './Settings'
+import { BackIcon, ExpandIcon, SendIcon, WaveformIcon } from './components/icons'
+import { useFitWindow } from './useFitWindow'
 import * as audio from './audio/capture'
 
-function appearanceStyle(a: Appearance): React.CSSProperties {
-  return {
-    '--nerd-bg-alpha': a.bgAlpha,
-    '--nerd-blur': `${a.blur}px`,
-    '--nerd-font-size': `${a.fontSize}px`,
-    '--nerd-accent': a.accent
-  } as React.CSSProperties
+const SCREEN_QUESTION = 'What am I currently seeing on my screen?'
+// cmd+Enter "Assist": send a context-grounded prompt but show a short "Assist" bubble.
+const ASSIST_PROMPT =
+  'Assist me with what is currently on my screen and in this conversation. ' +
+  'If it relates to Headout, use Headout knowledge; otherwise answer generally.'
+const ASSIST_LABEL = 'Assist'
+
+function mmss(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
 function App(): React.JSX.Element {
-  const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE)
-  const [format, setFormat] = useState<OutputFormat>('list')
+  const [format] = useState<OutputFormat>('list')
   const [hidden, setHidden] = useState(true)
   const [collapsed, setCollapsed] = useState(false)
-  const [showConfig, setShowConfig] = useState(false)
-
-  const [briefing, setBriefing] = useState<BriefingResult | null>(null)
-  const [briefingLoading, setBriefingLoading] = useState(false)
-  const [syncLabel, setSyncLabel] = useState('unknown')
+  const [modesOpen, setModesOpen] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<Tab>('general')
+  const [composerOpen, setComposerOpen] = useState(false)
 
   const [listening, setListening] = useState(false)
+  const [showTranscript, setShowTranscript] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([])
   const [modes, setModes] = useState<Mode[]>([])
 
+  // Completed Q&A turns. The current in-flight question/answer lives in the fields
+  // below and is appended here once it finalizes.
+  const [history, setHistory] = useState<QATurn[]>([])
+  const [question, setQuestion] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
   const [answerText, setAnswerText] = useState('')
   const [streaming, setStreaming] = useState(false)
-  const [final, setFinal] = useState<FinalAnswer | null>(null)
   const reqId = useRef(0)
+  // Mirror the in-flight Q&A so the (once-registered) onAnswer handler can archive it.
+  const questionRef = useRef<string | null>(null)
+  const answerRef = useRef('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  useFitWindow(overlayRef, null)
 
   useEffect(() => {
-    void window.nerd.getSettings().then((s) => {
-      setAppearance(s.appearance)
-      setFormat(s.format)
-      setHidden(s.hidden)
-    })
-    void window.nerd.getSyncStatus().then((s) => setSyncLabel(s.ageLabel))
+    questionRef.current = question
+    answerRef.current = answerText
+  })
+
+  useEffect(() => {
+    void window.nerd.getSettings().then((s) => setHidden(s.hidden))
     void window.nerd.listModes().then(setModes)
 
     const offPartial = window.nerd.onPartialAnswer((p) => {
       if (p.requestId < reqId.current) return
       if (p.requestId > reqId.current) {
-        // A newer answer (often a hotkey trigger) started — reset and surface it.
         reqId.current = p.requestId
         setAnswerText('')
-        setFinal(null)
         setStreaming(true)
-        setShowConfig(false)
+        setModesOpen(false)
       }
       setAnswerText((t) => t + p.delta)
     })
@@ -72,39 +74,68 @@ function App(): React.JSX.Element {
       if (a.requestId < reqId.current) return
       reqId.current = a.requestId
       setStreaming(false)
-      setFinal(a)
-      if (a.error && a.error !== 'cancelled') setAnswerText(a.error)
-    })
-    const offBriefing = window.nerd.onBriefingReady((b) => {
-      setBriefing(b)
-      setBriefingLoading(false)
-      setSyncLabel(b.contextAge)
+      if (a.error === 'cancelled') return
+      // Archive the finished turn into history and clear the in-flight fields.
+      setHistory((h) => [
+        ...h,
+        {
+          question: questionRef.current,
+          answer: a.text || answerRef.current,
+          streaming: false,
+          final: a
+        }
+      ])
+      setQuestion(null)
+      setAnswerText('')
     })
     const offTranscript = window.nerd.onTranscript(setTranscript)
+    const offCollapsed = window.nerd.onCollapsedChanged(setCollapsed)
     return () => {
       offPartial()
       offAnswer()
-      offBriefing()
       offTranscript()
+      offCollapsed()
     }
   }, [])
 
-  const changeAppearance = (a: Appearance): void => {
-    setAppearance(a)
-    void window.nerd.setAppearance(a)
-  }
+  useEffect(() => {
+    if (!listening) return
+    const started = Date.now()
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [listening])
 
-  const changeFormat = (f: OutputFormat): void => {
-    setFormat(f)
-    void window.nerd.setOutputFormat(f)
-  }
-
-  const ask = async (q: string): Promise<void> => {
+  const ask = async (q: string, label?: string): Promise<void> => {
+    setQuestion(label ?? q)
     setAnswerText('')
-    setFinal(null)
     setStreaming(true)
-    setShowConfig(false)
+    setModesOpen(false)
     reqId.current = await window.nerd.askManually(q, format)
+  }
+
+  const submitDraft = (): void => {
+    const q = draft.trim()
+    if (!q) return
+    void ask(q)
+    setDraft('')
+    setComposerOpen(false)
+  }
+
+  const revealComposer = (): void => {
+    setComposerOpen(true)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const newChat = (): void => {
+    reqId.current += 1
+    setHistory([])
+    setQuestion(null)
+    setAnswerText('')
+    setStreaming(false)
+    setDraft('')
+    setComposerOpen(false)
+    setModesOpen(false)
+    setShowTranscript(false)
   }
 
   const toggleHidden = (): void => {
@@ -118,97 +149,172 @@ function App(): React.JSX.Element {
       audio.stopCapture()
       await window.nerd.stopCapture()
       setListening(false)
-      setTranscript([])
+      // Keep the transcript visible after stopping; it clears on the next start.
     } else {
-      await window.nerd.startCapture() // open Deepgram before frames flow
+      setTranscript([])
+      await window.nerd.startCapture()
       await audio.startCapture()
+      setElapsed(0)
       setListening(true)
     }
   }
 
-  const collapse = (): void => {
-    setCollapsed(true)
-    void window.nerd.setCollapsed(true)
-  }
   const expand = (): void => {
     setCollapsed(false)
     void window.nerd.setCollapsed(false)
   }
 
-  const snap = (c: Corner): void => void window.nerd.snapToCorner(c)
-
-  const runBriefing = (desc: string): void => {
-    setBriefingLoading(true)
-    setShowConfig(false)
-    void window.nerd.runBriefing(desc)
+  const pickMode = async (id: string): Promise<void> => {
+    setModes(await window.nerd.setActiveMode(id))
+    setModesOpen(false)
   }
 
-  const rootClass = `theme-${appearance.theme}`
+  const openSettings = (tab: Tab = 'general'): void => {
+    setModesOpen(false)
+    setSettingsTab(tab)
+    setShowSettings(true)
+  }
+
+  // Global shortcuts dispatched from main: cmd+T toggles the session, cmd+. toggles settings.
+  // The handler lives in a ref (refreshed each render) so the IPC listener subscribes exactly
+  // once — no re-subscription churn that could double-fire and cancel the toggle.
+  const shortcutRef = useRef<(a: ShortcutAction) => void>(() => {})
+  useEffect(() => {
+    shortcutRef.current = (action: ShortcutAction): void => {
+      switch (action) {
+        case 'toggleSession':
+          void toggleListening()
+          break
+        case 'openSettings':
+          setModesOpen(false)
+          setSettingsTab('general')
+          setShowSettings((v) => !v)
+          break
+        default: {
+          const _exhaustive: never = action
+          return _exhaustive
+        }
+      }
+    }
+  })
+  useEffect(() => window.nerd.onShortcut((a) => shortcutRef.current(a)), [])
+
+  // Tab reveals the hidden composer; cmd/ctrl+Enter fires the "Assist" action.
+  useEffect(() => {
+    if (showSettings || collapsed) return
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        void ask(ASSIST_PROMPT, ASSIST_LABEL)
+      } else if (e.key === 'Tab' && !composerOpen) {
+        e.preventDefault()
+        revealComposer()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composerOpen, showSettings, collapsed])
+
+  const qaTurns: QATurn[] =
+    question !== null
+      ? [...history, { question, answer: answerText, streaming, final: null }]
+      : history
+
+  const hasThread = qaTurns.length > 0 || streaming || showTranscript
 
   if (collapsed) {
     return (
-      <div className={`nerd-pill ${rootClass}`} style={appearanceStyle(appearance)}>
-        <span className="brand">nerd</span>
-        <span className={`nerd-indicator ${hidden ? 'hidden' : 'visible'}`}>
-          <span className="dot" />
-        </span>
-        {listening && (
-          <span className="nerd-indicator live">
-            <span className="dot" />
-          </span>
-        )}
+      <div className="nerd-pill">
+        <span className="brand">Nerd</span>
+        {listening && <WaveformIcon size={14} className="pill-live" />}
         <span className="spacer" />
-        <button className="nerd-btn" title="Expand" onClick={expand}>
-          ▢
+        <button className="icon-btn" title="Expand" onClick={expand}>
+          <ExpandIcon size={14} />
         </button>
       </div>
     )
   }
 
-  return (
-    <div className={`nerd-overlay ${rootClass}`} style={appearanceStyle(appearance)}>
-      <WidgetHeader
-        hidden={hidden}
-        listening={listening}
-        showConfig={showConfig}
-        onToggleConfig={() => setShowConfig((v) => !v)}
-        onToggleHidden={toggleHidden}
-        onToggleListening={toggleListening}
-        onCollapse={collapse}
-        onSnap={snap}
+  if (showSettings) {
+    return (
+      <Settings
+        onClose={() => setShowSettings(false)}
+        onModesChanged={setModes}
+        initialTab={settingsTab}
       />
+    )
+  }
 
-      <div className="nerd-body">
-        <div className="sync-line">
-          Knowledge base synced {syncLabel} · press ⌘+Enter to answer from the conversation
-        </div>
-        {showConfig ? (
-          <>
-            <ConfigPanel
-              appearance={appearance}
-              onAppearanceChange={changeAppearance}
-              onRunBriefing={runBriefing}
-              briefingLoading={briefingLoading}
-            />
-            <ModesPanel modes={modes} onChange={setModes} />
-          </>
-        ) : (
-          <>
-            {briefing && <BriefingCard briefing={briefing} />}
-            <AnswerPanel
-              text={answerText}
-              streaming={streaming}
-              final={final}
-              format={format}
-              onFormatChange={changeFormat}
-            />
-            {listening && <TranscriptFeed turns={transcript} />}
-          </>
+  return (
+    <div className="nerd-overlay" ref={overlayRef}>
+      <div className={`nerd-topbar ${hasThread ? 'active' : 'idle'}`}>
+        {hasThread && (
+          <button className="icon-btn" title="Focus input" onClick={revealComposer}>
+            <BackIcon size={16} />
+          </button>
         )}
+        <span className="hint">{hasThread ? 'Press tab to focus' : 'Press cmd + \\ to hide'}</span>
       </div>
 
-      {!showConfig && <ManualInputBar onAsk={ask} />}
-      <div className="resize-grip" />
+      {(hasThread || composerOpen) && (
+        <div className="nerd-body">
+          {hasThread && (
+            <ChatThread turns={qaTurns} transcript={transcript} showTranscript={showTranscript} />
+          )}
+          {composerOpen && (
+            <div className="nerd-composer">
+              <input
+                ref={inputRef}
+                className="composer-input"
+                placeholder="Ask Nerd a question…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => setComposerOpen(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    submitDraft()
+                  } else if (e.key === 'Escape') {
+                    setComposerOpen(false)
+                  }
+                }}
+              />
+              <button
+                className="icon-btn send"
+                title="Ask (Enter)"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={submitDraft}
+              >
+                <SendIcon size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <Toolbar
+        hidden={hidden}
+        listening={listening}
+        modesOpen={modesOpen}
+        showTranscript={showTranscript}
+        elapsed={mmss(elapsed)}
+        newChatLabel={!hasThread}
+        onToggleModes={() => setModesOpen((v) => !v)}
+        onScreen={() => void ask(SCREEN_QUESTION)}
+        onToggleHidden={toggleHidden}
+        onToggleListening={toggleListening}
+        onToggleTranscript={() => setShowTranscript((v) => !v)}
+        onNewChat={newChat}
+      />
+
+      {modesOpen && (
+        <ModeDropdown
+          modes={modes}
+          onPick={(id) => void pickMode(id)}
+          onOpenSettings={() => openSettings('modes')}
+        />
+      )}
     </div>
   )
 }

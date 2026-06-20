@@ -5,6 +5,7 @@ import type {
   Mode,
   OutputFormat,
   Settings,
+  ShortcutId,
   SyncStatus,
   TranscriptRole
 } from '@shared/types'
@@ -54,11 +55,17 @@ export function registerIpc({ getWindows, coordinator, transcription }: Deps): v
     getWindows().setCollapsed(collapsed)
   )
   ipcMain.handle(CH.windowHidden, (_e, hidden: boolean) => getWindows().setHidden(hidden))
+  ipcMain.handle(CH.windowContentSize, (_e, width: number | null, height: number) =>
+    getWindows().setContentSize(width, height)
+  )
 
   // ---- Settings ----
   ipcMain.handle(CH.settingsGet, (): Settings => loadSettings())
   ipcMain.handle(CH.settingsAppearance, (_e, appearance: Appearance) =>
     saveSettings({ appearance })
+  )
+  ipcMain.handle(CH.shortcutSet, (_e, id: ShortcutId, key: string) =>
+    getWindows().updateShortcut(id, key)
   )
   ipcMain.handle(CH.syncStatus, async (): Promise<SyncStatus> => {
     const lastSyncedAt = await getLastSync()

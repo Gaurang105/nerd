@@ -9,8 +9,12 @@ export const CH = {
   windowSnap: 'window:snap',
   windowCollapse: 'window:collapse',
   windowHidden: 'window:hidden',
+  windowContentSize: 'window:contentSize',
+  windowCollapsedChanged: 'window:collapsedChanged',
+  shortcut: 'window:shortcut',
   settingsGet: 'settings:get',
   settingsAppearance: 'settings:appearance',
+  shortcutSet: 'shortcut:set',
   syncStatus: 'sync:status',
   // Audio + transcription
   audioStart: 'audio:start',

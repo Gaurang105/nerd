@@ -13,7 +13,12 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v
 // relative position (so a top-right snap stays top-right, a free-dragged spot
 // stays proportionally placed). Result is clamped to keep the window on-screen
 // with `margin` breathing room. Pure (no electron) so it can run under tsx.
-export function remapBounds(b: Rect, from: Rect, to: Rect, margin: number): { x: number; y: number } {
+export function remapBounds(
+  b: Rect,
+  from: Rect,
+  to: Rect,
+  margin: number
+): { x: number; y: number } {
   const relX = clamp((b.x - from.x) / Math.max(1, from.width - b.width), 0, 1)
   const relY = clamp((b.y - from.y) / Math.max(1, from.height - b.height), 0, 1)
 

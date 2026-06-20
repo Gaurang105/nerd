@@ -25,6 +25,9 @@ export class TranscriptionService {
   async start(): Promise<void> {
     if (this.running) return
     this.running = true
+    // Fresh session: drop the previous recording's transcript.
+    transcripts.clear()
+    this.onUpdate()
     await Promise.all([this.open('me'), this.open('them')])
   }
 
@@ -84,7 +87,8 @@ export class TranscriptionService {
     }
     this.sockets = {}
     this.ready = {}
-    transcripts.clear()
+    // Keep the transcript after stopping so the user can still review it; it is
+    // cleared on the next start() instead.
     this.onUpdate()
   }
 

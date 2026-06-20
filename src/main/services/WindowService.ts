@@ -1,9 +1,10 @@
 import { BrowserWindow, screen, globalShortcut } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import type { Corner } from '@shared/types'
+import type { Corner, ShortcutAction, ShortcutId } from '@shared/types'
 import { loadSettings, saveSettings } from '../config/store'
 import { remapBounds } from './displayFollow'
+import { CH } from '../ipc/channels'
 
 const PILL = { width: 220, height: 56 }
 const DEFAULT_PANEL = { width: 420, height: 560 }
@@ -15,6 +16,10 @@ export class WindowService {
   private expandedSize = { ...DEFAULT_PANEL }
   private persistTimer: NodeJS.Timeout | null = null
   private followTimer: NodeJS.Timeout | null = null
+  // Width the overlay should return to once a transient widening (Settings) ends.
+  private restoreWidth: number | null = null
+  // Currently registered accelerator per rebindable shortcut, so we can unregister it.
+  private accels: Partial<Record<ShortcutId, string>> = {}
 
   constructor() {
     const settings = loadSettings()
@@ -24,12 +29,12 @@ export class WindowService {
     this.win = new BrowserWindow({
       ...bounds,
       minWidth: 280,
-      minHeight: 120,
+      minHeight: 72,
       show: false,
       frame: false,
       transparent: true,
       hasShadow: false,
-      resizable: true,
+      resizable: false,
       alwaysOnTop: true,
       skipTaskbar: true,
       fullscreenable: false,
@@ -70,7 +75,10 @@ export class WindowService {
     if (this.followTimer) return
     this.followTimer = setInterval(() => this.followCursorDisplay(), 750)
     this.win.on('closed', () => {
-      if (this.followTimer) { clearInterval(this.followTimer); this.followTimer = null }
+      if (this.followTimer) {
+        clearInterval(this.followTimer)
+        this.followTimer = null
+      }
     })
   }
 
@@ -108,6 +116,45 @@ export class WindowService {
     for (const [accel, corner] of Object.entries(map)) {
       globalShortcut.register(accel, () => this.snapToCorner(corner))
     }
+    this.applyConfiguredShortcuts()
+  }
+
+  // The user-rebindable shortcuts (Cmd/Ctrl + a configurable key). Re-registers from
+  // the persisted config; called on startup and whenever a binding changes.
+  private applyConfiguredShortcuts(): void {
+    const handlers: Record<ShortcutId, () => void> = {
+      openSettings: () => this.sendShortcut('openSettings'),
+      toggleSession: () => this.sendShortcut('toggleSession'),
+      hide: () => this.toggleVisible()
+    }
+    const { shortcuts } = loadSettings()
+    for (const id of Object.keys(handlers) as ShortcutId[]) {
+      const prev = this.accels[id]
+      if (prev) globalShortcut.unregister(prev)
+      const accel = `CommandOrControl+${shortcuts[id]}`
+      try {
+        if (globalShortcut.register(accel, handlers[id])) this.accels[id] = accel
+        else delete this.accels[id]
+      } catch {
+        delete this.accels[id]
+      }
+    }
+  }
+
+  updateShortcut(id: ShortcutId, key: string): void {
+    const shortcuts = { ...loadSettings().shortcuts, [id]: key }
+    saveSettings({ shortcuts })
+    this.applyConfiguredShortcuts()
+  }
+
+  private sendShortcut(action: ShortcutAction): void {
+    if (!this.win.isDestroyed()) this.win.webContents.send(CH.shortcut, action)
+  }
+
+  toggleVisible(): void {
+    if (this.win.isDestroyed()) return
+    if (this.win.isVisible()) this.win.hide()
+    else this.win.show()
   }
 
   snapToCorner(corner: Corner): void {
@@ -127,6 +174,34 @@ export class WindowService {
     this.schedulePersist()
   }
 
+  // ponytail: window height is content-driven (renderer ResizeObserver -> here), so
+  // vertical user-resize is overridden; width stays user-resizable. Ceiling: a fast
+  // feedback loop could thrash if content height oscillates; renderer debounces it.
+  setContentSize(width: number | null, height: number): void {
+    if (this.collapsed || this.win.isDestroyed()) return
+    const b = this.win.getBounds()
+    const wa = screen.getDisplayNearestPoint(b).workArea
+
+    let targetWidth = b.width
+    if (width != null) {
+      if (this.restoreWidth == null) this.restoreWidth = b.width
+      targetWidth = width
+    } else if (this.restoreWidth != null) {
+      targetWidth = this.restoreWidth
+      this.restoreWidth = null
+    }
+    targetWidth = Math.min(Math.max(targetWidth, 280), wa.width - MARGIN * 2)
+    const targetHeight = Math.min(Math.max(Math.ceil(height), 72), wa.height - MARGIN * 2)
+
+    let x = Math.min(b.x, wa.x + wa.width - targetWidth - MARGIN)
+    x = Math.max(x, wa.x + MARGIN)
+    let y = Math.min(b.y, wa.y + wa.height - targetHeight - MARGIN)
+    y = Math.max(y, wa.y + MARGIN)
+
+    this.win.setBounds({ x, y, width: targetWidth, height: targetHeight })
+    this.expandedSize = { width: targetWidth, height: targetHeight }
+  }
+
   setHidden(hidden: boolean): void {
     // Built-in Electron content protection: macOS NSWindow sharingType=.none,
     // Windows WDA_EXCLUDEFROMCAPTURE. No native addon needed.
@@ -143,7 +218,7 @@ export class WindowService {
       this.win.setMinimumSize(PILL.width, PILL.height)
       this.win.setBounds({ ...b, ...PILL }, true)
     } else {
-      this.win.setMinimumSize(280, 120)
+      this.win.setMinimumSize(280, 72)
       this.win.setBounds({ ...b, ...this.expandedSize }, true)
     }
   }
@@ -153,7 +228,9 @@ export class WindowService {
     if (this.persistTimer) clearTimeout(this.persistTimer)
     this.persistTimer = setTimeout(() => {
       const b = this.win.getBounds()
-      saveSettings({ bounds: { x: b.x, y: b.y, width: b.width, height: b.height } })
+      // Keep the persisted width as the overlay width even while transiently widened.
+      const width = this.restoreWidth ?? b.width
+      saveSettings({ bounds: { x: b.x, y: b.y, width, height: b.height } })
     }, 400)
   }
 }

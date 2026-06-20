@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { DEFAULT_APPEARANCE, type Settings } from '@shared/types'
+import { DEFAULT_APPEARANCE, DEFAULT_SHORTCUTS, type Settings } from '@shared/types'
 
 // ponytail: a single JSON file in userData instead of pulling in electron-store.
 // Ceiling: synchronous read/write, fine for a tiny settings blob written on debounce.
@@ -11,7 +11,8 @@ const DEFAULTS: Settings = {
   appearance: DEFAULT_APPEARANCE,
   bounds: null,
   hidden: true,
-  format: 'list'
+  format: 'list',
+  shortcuts: DEFAULT_SHORTCUTS
 }
 
 let cache: Settings | null = null
@@ -25,7 +26,12 @@ export function loadSettings(): Settings {
   let next: Settings
   try {
     const raw = JSON.parse(readFileSync(file(), 'utf-8'))
-    next = { ...DEFAULTS, ...raw, appearance: { ...DEFAULT_APPEARANCE, ...raw.appearance } }
+    next = {
+      ...DEFAULTS,
+      ...raw,
+      appearance: { ...DEFAULT_APPEARANCE, ...raw.appearance },
+      shortcuts: { ...DEFAULT_SHORTCUTS, ...raw.shortcuts }
+    }
   } catch {
     next = { ...DEFAULTS }
   }

@@ -22,6 +22,18 @@ export interface Mode {
 
 export type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+/** Actions dispatched to the renderer from main-registered global shortcuts. */
+export type ShortcutAction = 'toggleSession' | 'openSettings'
+
+/** User-rebindable global shortcuts. Each is Cmd/Ctrl + the stored single key. */
+export type ShortcutId = 'openSettings' | 'hide' | 'toggleSession'
+export type ShortcutMap = Record<ShortcutId, string>
+export const DEFAULT_SHORTCUTS: ShortcutMap = {
+  openSettings: '.',
+  hide: '\\',
+  toggleSession: 't'
+}
+
 export type Theme = 'light' | 'dark'
 
 export interface Appearance {
@@ -48,6 +60,7 @@ export interface Settings {
   bounds: WindowBounds | null
   hidden: boolean
   format: OutputFormat
+  shortcuts: ShortcutMap
 }
 
 /** A retrieved + reranked KB chunk used to ground an answer. */
@@ -121,9 +134,17 @@ export interface NerdAPI {
   snapToCorner: (corner: Corner) => Promise<void>
   setCollapsed: (collapsed: boolean) => Promise<void>
   setHidden: (hidden: boolean) => Promise<void>
+  /** Fit the window to rendered content. `width` null keeps the current width. */
+  setContentSize: (width: number | null, height: number) => Promise<void>
+  /** Fires when main toggles collapse (e.g. the global shortcut) so the view follows. */
+  onCollapsedChanged: (cb: (collapsed: boolean) => void) => () => void
+  /** Global-shortcut actions dispatched from main (e.g. 'toggleSession', 'openSettings'). */
+  onShortcut: (cb: (action: ShortcutAction) => void) => () => void
   // Settings
   getSettings: () => Promise<Settings>
   setAppearance: (appearance: Appearance) => Promise<void>
+  /** Rebind a global shortcut to Cmd/Ctrl + the given single key. */
+  setShortcut: (id: ShortcutId, key: string) => Promise<void>
   getSyncStatus: () => Promise<SyncStatus>
   // Audio + transcription
   startCapture: () => Promise<void>

@@ -5,24 +5,26 @@
 }
 
 :root {
-  --nerd-bg-alpha: 0.72;
-  --nerd-blur: 18px;
+  /* Black-glass surfaces (from Figma) */
+  --nerd-bar: rgba(0, 0, 0, 0.5);
+  --nerd-body: rgba(0, 0, 0, 0.8);
+  --nerd-panel: rgba(0, 0, 0, 0.8);
+  --nerd-blur: 10px;
+
+  /* Accents */
+  --nerd-bubble: rgba(255, 255, 255, 0.2);
+  --nerd-tab-active: rgba(255, 255, 255, 0.1);
+  --nerd-line: #333;
+
+  /* Text */
+  --nerd-fg: #ffffff;
+  --nerd-fg-secondary: #dddddd;
+  --nerd-muted: rgba(255, 255, 255, 0.7);
+  --nerd-action: rgba(221, 221, 221, 0.6);
+  --nerd-hint: rgba(221, 221, 221, 0.7);
+
+  --nerd-radius: 12px;
   --nerd-font-size: 14px;
-  --nerd-accent: #7c8cff;
-
-  --nerd-bg: 17, 19, 28;
-  --nerd-fg: #e7e9f3;
-  --nerd-muted: #9aa0b4;
-  --nerd-line: rgba(255, 255, 255, 0.08);
-  --nerd-elev: rgba(255, 255, 255, 0.05);
-}
-
-.theme-light {
-  --nerd-bg: 248, 249, 252;
-  --nerd-fg: #1a1d29;
-  --nerd-muted: #5a6072;
-  --nerd-line: rgba(0, 0, 0, 0.08);
-  --nerd-elev: rgba(0, 0, 0, 0.04);
 }
 
 html,
@@ -38,6 +40,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: var(--nerd-fg);
   font-size: var(--nerd-font-size);
+  letter-spacing: -0.03em;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }

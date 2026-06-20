@@ -10,6 +10,7 @@ import type {
   OutputFormat,
   PartialAnswer,
   Settings,
+  ShortcutAction,
   SyncStatus,
   TranscriptTurn
 } from '@shared/types'
@@ -31,8 +32,12 @@ const nerd: NerdAPI = {
   snapToCorner: (corner: Corner) => ipcRenderer.invoke(CH.windowSnap, corner),
   setCollapsed: (collapsed) => ipcRenderer.invoke(CH.windowCollapse, collapsed),
   setHidden: (hidden) => ipcRenderer.invoke(CH.windowHidden, hidden),
+  setContentSize: (width, height) => ipcRenderer.invoke(CH.windowContentSize, width, height),
+  onCollapsedChanged: (cb) => subscribe<boolean>(CH.windowCollapsedChanged, cb),
+  onShortcut: (cb) => subscribe<ShortcutAction>(CH.shortcut, cb),
   getSettings: (): Promise<Settings> => ipcRenderer.invoke(CH.settingsGet),
   setAppearance: (appearance: Appearance) => ipcRenderer.invoke(CH.settingsAppearance, appearance),
+  setShortcut: (id, key) => ipcRenderer.invoke(CH.shortcutSet, id, key),
   getSyncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke(CH.syncStatus),
   startCapture: () => ipcRenderer.invoke(CH.audioStart),
   stopCapture: () => ipcRenderer.invoke(CH.audioStop),
