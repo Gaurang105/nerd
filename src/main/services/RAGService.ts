@@ -22,7 +22,7 @@ const DISPLAY_CAP = 200
 // Per-stage budgets sized for real network round-trips to OpenAI/Qdrant/Cohere.
 // embed has no fallback, so its budget must comfortably exceed normal API latency.
 const BUDGET = { rewrite: 4_000, embed: 5_000, retrieve: 4_000, rerank: 4_000 }
-const WALL_CLOCK_MS = 30_000
+const WALL_CLOCK_MS = 60_000
 
 export interface AnswerRequest {
   requestId: number

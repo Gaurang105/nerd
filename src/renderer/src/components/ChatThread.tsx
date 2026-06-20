@@ -119,15 +119,22 @@ function ChatThread({ turns, transcript, showTranscript, status }: Props): React
   const endRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrolled, setScrolled] = useState(false)
+  // Only follow streaming output while the user is parked at the bottom; once they
+  // scroll up to read, leave them alone instead of yanking back down on every token.
+  const atBottomRef = useRef(true)
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' })
+    if (atBottomRef.current) endRef.current?.scrollIntoView({ block: 'end' })
   }, [turns, transcript, showTranscript])
 
   return (
     <div
       className="nerd-thread"
       ref={scrollRef}
-      onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 24)}
+      onScroll={(e) => {
+        const el = e.currentTarget
+        atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+        setScrolled(el.scrollTop > 24)
+      }}
     >
       {showTranscript ? (
         transcript.length === 0 ? (
