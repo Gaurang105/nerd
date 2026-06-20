@@ -8,3 +8,5 @@ out
 .agents/
 .claude/
 .cursor/
+# one-time Slack extraction dumps (not committed)
+data/

@@ -40,16 +40,19 @@ Also useful for: support leads, ops, account managers, anyone in a meeting who n
 ## Full system architecture
 
 ```
-Data Sources (Slack)
+Data Sources (Slack — unstructured text) + BigQuery (structured analytics tables)
         │
         ▼
 Dedicated always-on laptop (Docker; data in named volumes — survives restarts)
   ├── cron only (Node.js, no HTTP server)
-  │     ├── node-cron every 6h — differential sync
+  │     ├── node-cron every 6h — differential sync (Slack → RAG)
   │     ├── Fetch changed docs from source APIs
   │     ├── Chunk + embed (OpenAI text-embedding-3-small)
   │     ├── Write vectors → Qdrant on localhost:6333
-  │     └── Write metadata → Postgres on localhost:5432
+  │     ├── Write metadata → Postgres on localhost:5432
+  │     └── BigQuery mirror job → Postgres analytical tables on localhost:5432
+  │           (dim_experiences, dim_experience_listings, dim_experience_management,
+  │            experience_listing_events, fct_zendesk_ops_tickets — NOT chunked/embedded)
   ├── Qdrant   — local Docker :6333 (web UI at /dashboard) → ngrok static HTTPS URL
   └── Postgres — local Docker :5432                        → bore.pub TCP host:port
         │ (the cron writes locally; the public tunnel URLs below are for the Electron apps)
@@ -67,9 +70,11 @@ Electron App — all RAG and answer logic runs locally (macOS + Windows)
   ├── HotkeyService (global hotkey → slices transcript + screen OCR → triggers RAG)
   ├── ModeService (local modes.json — active custom system prompt)
   ├── RAGService
+  │     ├── rewrite + route → fast LLM (GPT-5.4-mini): clean question + route (slack | sql | both)
   │     ├── embed question → OpenAI API
-  │     ├── search → Qdrant directly (ngrok public HTTPS URL)
-  │     └── generate answer → OpenAI API (GPT-5.5, active Mode prompt + screen text)
+  │     ├── search → Qdrant directly (ngrok public HTTPS URL) — always
+  │     ├── text-to-SQL → read-only Postgres (bore.pub) when route is sql/both — parallel to Qdrant
+  │     └── generate answer → OpenAI API (GPT-5.5, active Mode prompt + screen text + SQL data)
   ├── PreCallBriefingService
   │     ├── embed rep's meeting description → Qdrant (full knowledge base)
   │     └── generate briefing → OpenAI API (GPT-5.5, active Mode prompt)
@@ -78,20 +83,23 @@ Electron App — all RAG and answer logic runs locally (macOS + Windows)
 
 ### What runs where — quick reference
 
-| Component            | Where it runs                                                         | Why                                                                                                        |
-| -------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Cron sync            | Dedicated always-on laptop                                            | Stays on so the cron always fires; reps' own laptops can be closed                                         |
-| Chunking + embedding | Dedicated laptop (during sync)                                        | Runs once per changed doc, not per query                                                                   |
-| Qdrant vectors       | Local Docker :6333 on dedicated laptop, public via ngrok static HTTPS | Cron writes locally; Electron apps query over the tunnel                                                   |
-| Postgres metadata    | Local Docker :5432 on dedicated laptop, public via bore.pub TCP       | Cron writes locally; Electron apps query over the tunnel                                                   |
-| RAG query logic      | Electron main process (local)                                         | Low latency, no server hop during live call                                                                |
-| Answer generation    | Electron → OpenAI API (local call)                                    | Direct API call, no middleman                                                                              |
-| Pre-call briefing    | Electron → OpenAI API (local call)                                    | Direct API call, no middleman                                                                              |
-| Audio capture        | Electron main process (local)                                         | OS-level audio driver access                                                                               |
-| Transcription        | Electron → Deepgram (WebSocket)                                       | Streaming STT, low latency                                                                                 |
-| Screen OCR           | Electron main process (local)                                         | Native per-OS (macOS ScreenCaptureKit+Vision / Windows Graphics Capture+Windows.Media.Ocr); on-demand only |
-| Mode store           | Electron main process (local)                                         | Per-rep `modes.json`; no sync needed                                                                       |
-| Overlay UI           | Electron renderer (local)                                             | React, always-on-top window                                                                                |
+| Component                      | Where it runs                                                                | Why                                                                                                        |
+| ------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Cron sync                      | Dedicated always-on laptop                                                   | Stays on so the cron always fires; reps' own laptops can be closed                                         |
+| Chunking + embedding           | Dedicated laptop (during sync)                                               | Runs once per changed doc, not per query                                                                   |
+| Qdrant vectors                 | Local Docker :6333 on dedicated laptop, public via ngrok static HTTPS        | Cron writes locally; Electron apps query over the tunnel                                                   |
+| Postgres metadata              | Local Docker :5432 on dedicated laptop, public via bore.pub TCP              | Cron writes locally; Electron apps query over the tunnel                                                   |
+| BigQuery analytical tables     | Local Docker Postgres :5432, mirrored from BigQuery, public via bore.pub TCP | Structured facts queried live via SQL; mirror job keeps them fresh                                         |
+| Query routing (slack/sql/both) | Electron main process (local), folded into the rewrite LLM call              | No extra hop — the rewrite call already runs on every hotkey                                               |
+| Text-to-SQL query logic        | Electron main process (local) → read-only Postgres over bore.pub             | Structured numbers need SQL, not vector search; runs parallel to Qdrant                                    |
+| RAG query logic                | Electron main process (local)                                                | Low latency, no server hop during live call                                                                |
+| Answer generation              | Electron → OpenAI API (local call)                                           | Direct API call, no middleman                                                                              |
+| Pre-call briefing              | Electron → OpenAI API (local call)                                           | Direct API call, no middleman                                                                              |
+| Audio capture                  | Electron main process (local)                                                | OS-level audio driver access                                                                               |
+| Transcription                  | Electron → Deepgram (WebSocket)                                              | Streaming STT, low latency                                                                                 |
+| Screen OCR                     | Electron main process (local)                                                | Native per-OS (macOS ScreenCaptureKit+Vision / Windows Graphics Capture+Windows.Media.Ocr); on-demand only |
+| Mode store                     | Electron main process (local)                                                | Per-rep `modes.json`; no sync needed                                                                       |
+| Overlay UI                     | Electron renderer (local)                                                    | React, always-on-top window                                                                                |
 
 **The host laptop runs no HTTP server, no Express, no API endpoints.
 It is a single cron job that runs, syncs, and exits. Nothing else.**
@@ -137,12 +145,16 @@ Why not Pinecone / Qdrant Cloud: the self-hosted Docker setup has no quota and n
 
 ### Structured database — Postgres (self-hosted, local Docker)
 
-Stores: documents, document_chunks index, sync_runs log
+Stores two distinct kinds of data in the same Postgres instance:
+
+1. **RAG bookkeeping**: documents, document_chunks index, sync_runs log (written by the Slack cron)
+2. **BigQuery analytical mirror**: `dim_experiences`, `dim_experience_listings`, `dim_experience_management`, `experience_listing_events`, `fct_zendesk_ops_tickets` — structured facts mirrored from BigQuery and queried live via SQL (see § Structured data routing)
 
 - Plain **Postgres 16 (`postgres:16`)** in Docker on the same dedicated laptop; data in a named volume (survives restarts)
 - Exposed publicly via a **bore.pub** free TCP tunnel (`bore local 5432 --to bore.pub`) → a public `host:port` used as the connection string by every Electron app (the cron runs on the same laptop and writes to `localhost:5432` directly)
 - Standard `libpq` connection string — no Supabase SDK/Auth/RLS/Edge Functions; schema managed via plain SQL migrations
 - Queried directly from the Electron app — no app server hop
+- **The Electron apps connect with a read-only role** (`GRANT SELECT` only; no INSERT/UPDATE/DELETE/DDL). Live text-to-SQL is AI-generated, so the read-only role is the hard guarantee — the database itself rejects any write or a prompt-injected `DROP`/`DELETE`, regardless of what the model emits. The cron/mirror jobs use a separate read-write role.
 
 ### Embedding model — OpenAI text-embedding-3-small
 
@@ -300,6 +312,20 @@ CREATE INDEX ON documents(content_hash);
 CREATE INDEX ON document_chunks(doc_id);
 ```
 
+### BigQuery analytical mirror (same Postgres, queried via SQL — never embedded)
+
+Mirrored from BigQuery into the same Postgres instance and kept fresh by a mirror job. These are **structured fact/dimension tables** answered by SQL filtering + aggregation, not by vector search — they are deliberately **not** chunked or written to Qdrant. Routing decides when a question hits these vs. the Slack KB (see § Structured data routing). Full DDL lives in the DB; the queryable shape:
+
+| Table                       | Grain                                              | What it answers                                    | Key columns                                                                                                                                                               |
+| --------------------------- | -------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dim_experiences`           | one row per experience                             | catalog facts: pricing, rating, location, category | `experience_id`, `experience_name`, `city`, `country`, `primary_category_name`, `average_rating`, `count_ratings`, `listing_final_price`, `currency`, `is_available`      |
+| `dim_experience_listings`   | one row per listing ticket                         | supply/catalog pipeline status                     | `ticket_id`, `experience_id`, `city`, `listing_status`, `plc_status`, `content_status`, `inventory_status`, `sp_name`, `owner`, `priority`                                |
+| `dim_experience_management` | one row per experience↔collection↔category mapping | discoverability / taxonomy mapping                 | `experience_id`, `experience_city`, `category_name`, `collection_name`, `sub_category_name`, `combined_entity_name`                                                       |
+| `experience_listing_events` | one row per listing pipeline event (timestamped)   | throughput / time-in-stage over time               | `ticket_id`, `experience_id`, `event_name`, `event_timestamp`, `city`, `days_since_previous_step` (indexed on `event_timestamp`, `experience_id`)                         |
+| `fct_zendesk_ops_tickets`   | one row per ops ticket                             | ops SLA performance, resolution times              | `ticket_id`, `created_at`, `custom_city`, `priority`, `ticket_status`, `has_met_sla`, `sla_hours`, `minutes_to_full_resolution`, `l1_categorisation`, `l2_categorisation` |
+
+Tables may read empty while the mirror back-fills one-by-one — this does not affect routing or SQL generation, which are driven by the **schema/catalog, not by the presence of data**.
+
 ### Qdrant index
 
 ```
@@ -327,18 +353,24 @@ Runs entirely inside the Electron main process — no server hop.
 User presses hotkey (Cmd+Enter)
   → take last ~120s / 12 turns of transcript as raw context (+ last 3 answers to avoid repeating)
   ├─ (parallel) screen OCR: native capture of active display → native OCR (macOS Vision / Windows.Media.Ocr) → screen text — ~100–300ms
-  └─ query rewrite: fast LLM (gpt-5.4-mini) cleans transcript → clean question — ~120ms
+  └─ rewrite + route: fast LLM (gpt-5.4-mini) cleans transcript → { clean_question, route } — ~120ms
+       route ∈ { slack | sql | both }   (one call — routing adds ~0ms over the rewrite already made)
   → embed the clean question via OpenAI API — ~80ms
-  → Qdrant hybrid search (dense + sparse/BM25, RRF), full index, top 20 — ~6ms
-  → dedup near-identical chunks + recency/source boost
-  → Cohere rerank → drop below score threshold → take top 8 (often fewer) — ~180ms
-  → OpenAI API (gpt-5.5, low reasoning effort): 8 chunks + screen text + transcript context
-       + last 3 answers + active Mode system prompt + list/paragraph format → cited answer — ~800ms
+  ├─ (always) Qdrant hybrid search (dense + sparse/BM25, RRF), full index, top 20 — ~6ms
+  │     → dedup near-identical chunks + recency/source boost
+  │     → Cohere rerank → drop below score threshold → take top 8 (often fewer) — ~180ms
+  └─ (only if route ∈ {sql, both}, parallel to Qdrant) text-to-SQL — ~1–2s
+        → generate SQL (gpt-5.5) grounded on the table catalog (schemas + descriptions)
+        → execute against read-only Postgres with a statement_timeout — return rows (capped LIMIT)
+  → OpenAI API (gpt-5.5, low reasoning effort): up to 8 chunks (CONTEXT) + SQL rows (DATA) + screen text (SCREEN)
+       + transcript context + last 3 answers + active Mode system prompt + list/paragraph format → cited answer — ~800ms
   → IPC push → React overlay renders answer
-Total: ~1.2s v1 (screen OCR runs parallel to rewrite/embed, so it hides under the critical path)
+Total: ~1.2s for slack-only; ~2.5–3.5s when a SQL query runs (user accepts the extra latency for exact-number accuracy)
 ```
 
-Screen OCR runs on-demand at hotkey only (never ambient) and is best-effort: if capture/OCR fails or returns nothing, generation proceeds KB-only (the SCREEN block is `(none)`) and never blocks the answer.
+Qdrant retrieval is so cheap (~190ms incl. rerank) that the KB is fetched on **every** query regardless of route — so a `sql` question still gets relevant Slack context for free, and `both` costs nothing extra to support. Only the SQL path is conditional, and it runs in parallel with Qdrant so its latency does not stack on top of retrieval.
+
+Screen OCR runs on-demand at hotkey only (never ambient) and is best-effort: if capture/OCR fails or returns nothing, generation proceeds without it (the SCREEN block is `(none)`) and never blocks the answer. The SQL path is likewise best-effort: on timeout, error, or empty result, the `DATA` block degrades to `(none)` and generation proceeds on KB + screen alone.
 
 ### OpenAI prompt structure
 
@@ -348,30 +380,37 @@ The **system prompt below is the default**. When the user has an active Mode sel
 You are Nerd, a real-time assistant for a Headout employee on a live call.
 
 The user just pressed their hotkey. Below is the recent conversation transcript,
-retrieved context from Headout's internal knowledge base, and the text currently
-visible on the user's screen.
+retrieved context from Headout's internal knowledge base, live query results from
+Headout's analytics database, and the text currently visible on the user's screen.
 
-Answer the question implied by the conversation. Use THREE sources of truth:
-1. Headout's internal knowledge base (the CONTEXT below) — this is authoritative for
-   Headout-specific facts: numbers, SLAs, pricing, policies, names. Always prefer it.
-2. The user's live SCREEN text below — authoritative for whatever is on screen right
-   now (a shared deck, a dashboard, an open tab) that the KB may not contain.
-3. Your own general knowledge — use it to fill gaps, explain concepts, or answer
-   anything the CONTEXT and SCREEN do not cover.
+Answer the question implied by the conversation. Use FOUR sources of truth:
+1. Headout's internal knowledge base (the CONTEXT below) — authoritative for what
+   Headout SAYS: stated policies, SLAs, pricing tiers, processes, names. Always prefer it.
+2. Headout's analytics database (the DATA below) — authoritative for exact, current
+   NUMBERS computed from live data: counts, averages, statuses, SLA-hit rates. When a
+   question asks "how many / what's the average / what's the status of", this is the truth.
+3. The user's live SCREEN text below — authoritative for whatever is on screen right
+   now (a shared deck, a dashboard, an open tab) that the KB and DATA may not contain.
+4. Your own general knowledge — use it to fill gaps, explain concepts, or answer
+   anything the above do not cover.
 
 Rules:
 - Be concise. Lead with the exact number or fact.
-- When a fact comes from the CONTEXT, cite the source.
-- When a Headout-specific fact (a number, policy, SLA, price) is NOT in the CONTEXT
-  or SCREEN, do NOT invent it from general knowledge — say "I don't have that data — check with ops."
+- When a fact comes from the CONTEXT, cite the source. When a number comes from DATA,
+  say it is from live analytics.
+- When a Headout-specific fact (a number, policy, SLA, price) is NOT in the CONTEXT,
+  DATA, or SCREEN, do NOT invent it from general knowledge — say "I don't have that data — check with ops."
 - General/conceptual answers from your own knowledge are fine without a source, but make
   clear they are general guidance, not Headout's confirmed data.
 - {output_format_instruction}
   // "list"      → answer as terse bullets — just the number/hook (senior users)
   // "paragraph" → answer as fully paraphrased, ready-to-speak prose (junior users)
 
-CONTEXT:
+CONTEXT (Slack knowledge base):
 {up_to_8_reranked_deduped_chunks_with_source_labels}
+
+DATA (live analytics SQL result, or "(none)"):
+{sql_rows_as_compact_table_or_"(none)"}
 
 SCREEN (live, on user's display right now):
 {screen_ocr_text_or_"(none)"}
@@ -379,6 +418,64 @@ SCREEN (live, on user's display right now):
 RECENT TRANSCRIPT:
 {last_n_seconds_of_transcript}
 ```
+
+---
+
+## Structured data routing (Slack KB vs. SQL)
+
+Nerd has two retrieval modalities and must decide, per question, which to use:
+
+- **Slack KB (Qdrant, semantic RAG)** — answers what Headout _says_: stated policies, SLA commitments, pricing tiers, processes, qualitative knowledge written in threads. The answer is a _sentence_.
+- **Analytics DB (Postgres, text-to-SQL)** — answers the exact _number right now_: counts, averages, statuses, SLA-hit rates filtered/aggregated over the BigQuery-mirror tables. The answer is a _number or a list_.
+
+### The decision boundary
+
+| Signal            | → Slack KB (Qdrant)                                     | → Analytics DB (SQL)                                                          |
+| ----------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Question shape    | "what's our policy / how do we handle / why / approach" | "how many / what's the average / what's the status of / list / which / top N" |
+| Answer type       | qualitative, narrative, a stated commitment             | a computed number, a row, a filtered list                                     |
+| Where truth lives | written by a human in a thread                          | derived from dim/fct tables                                                   |
+| Freshness         | last 6h Slack sync                                      | last BigQuery mirror                                                          |
+
+Worked examples:
+
+- _"What's our SLA commitment to OTA partners?"_ → **Slack** (a stated promise).
+- _"What % of ops tickets actually met SLA last month in Paris?"_ → **SQL** (`fct_zendesk_ops_tickets.has_met_sla` filtered by `custom_city`, `created_at`).
+- _"How do we onboard a new vendor?"_ → **Slack** (process knowledge).
+- _"How many Colosseum listings are stuck in catalog status?"_ → **SQL** (`dim_experience_listings.catalog_ticket_status`).
+- _"What's the average rating and price for the Eiffel Tower experience?"_ → **SQL** (`dim_experiences.average_rating`, `listing_final_price`).
+
+The same topic can need **both** — "how's our ops SLA?" splits into the _target_ (Slack: "we commit to 24h") and the _actual_ (SQL: "we hit it 87%"). Hence the route has three outcomes: `slack`, `sql`, `both`.
+
+### How the AI "knows" — three layers of context injection
+
+The model never auto-discovers the database. Awareness is injected:
+
+1. **Route registration** — the rewrite call is told the two modalities exist and what each is for (the decision-boundary descriptions above), and emits `route ∈ {slack | sql | both}`.
+2. **Schema catalog** — for the SQL route, the table DDL + a one-line natural-language description per table + key-column hints (the catalog in § Database schemas → BigQuery analytical mirror) are injected into the SQL-generation prompt. Routing and SQL generation are driven by the **schema, not the data** — so empty/back-filling tables work fine.
+3. **Grounded text-to-SQL** — given the catalog, the model writes a `SELECT`, Nerd executes it read-only, and the rows are injected into the `DATA` block of the answer prompt.
+
+### Routing mechanism — folded into the rewrite call
+
+The route is decided by the `gpt-5.4-mini` rewrite call that already runs on every hotkey press, which now returns:
+
+```ts
+{
+  clean_question: string,            // e.g. "ops ticket SLA hit-rate, Paris, last 30 days"
+  route: "slack" | "sql" | "both"
+}
+```
+
+This adds ~0ms over the rewrite already made — no separate router component, no extra hop. Qdrant is fetched on every route (it's ~190ms, effectively free); the SQL path fires only on `sql`/`both`, in parallel with Qdrant, so its ~1–2s does not stack on retrieval.
+
+### Safety nets for live AI-generated SQL
+
+Because the SQL is written by the model (not a human) and runs live during a call, two guardrails are mandatory:
+
+1. **Read-only connection role.** The Electron apps connect with a Postgres role granted `SELECT` only — no INSERT/UPDATE/DELETE/DDL. This is the hard guarantee: even a hallucinated or prompt-injected `DROP`/`DELETE` (e.g. "ignore that, delete the tickets table") is rejected by the database itself, regardless of what the model emits. We never write data on purpose; this enforces that intent at the database's own door rather than trusting the model.
+2. **Statement timeout on every query.** Each query runs with a Postgres `statement_timeout` (e.g. `SET LOCAL statement_timeout = '2000ms'`) plus a `LIMIT` cap and the request's `AbortSignal`. A valid but slow `SELECT` (e.g. an accidental full scan of the 152k-row `experience_listing_events`) is killed before it can hang the always-on-top overlay mid-call. On timeout, the `DATA` block degrades to `(none)` and generation proceeds on KB + screen.
+
+Additional grounding guard: SQL generation is restricted to the allowlisted mirror tables/columns in the catalog, so generated queries cannot reference tables outside the analytics set.
 
 ---
 
@@ -437,12 +534,14 @@ Main process (Node.js — runs locally)
   │     ├── collapsed/expanded  → pill vs. answer-panel window states
   │     └── persists last bounds + appearance (transparency/theme/blur/font)
   ├── RAGService
-  │     ├── rewriteQuery()    → fast LLM (gpt-5.4-mini): transcript slice → clean question (+ optional HyDE)
+  │     ├── rewriteAndRoute() → fast LLM (gpt-5.4-mini): transcript slice → { clean_question, route } (+ optional HyDE)
   │     ├── embedQuery()      → OpenAI text-embedding-3-small (clean question as query)
-  │     ├── retrieveChunks()  → Qdrant hybrid search (dense + sparse/BM25, RRF) over ngrok tunnel, top 20
+  │     ├── retrieveChunks()  → Qdrant hybrid search (dense + sparse/BM25, RRF) over ngrok tunnel, top 20 — always
   │     ├── rerank()          → dedup + recency/source boost → Cohere Rerank → drop below threshold → up to 8
-  │     └── generateAnswer({ format, screenText, systemPrompt })
-  │                           → OpenAI API (gpt-5.5); active Mode prompt + screen text + list/paragraph format
+  │     ├── queryAnalytics()  → if route ∈ {sql, both}: gpt-5.5 text-to-SQL (catalog-grounded) → read-only
+  │     │                       Postgres (statement_timeout + LIMIT + AbortSignal) → rows for DATA block
+  │     └── generateAnswer({ format, screenText, sqlData, systemPrompt })
+  │                           → OpenAI API (gpt-5.5); active Mode prompt + CONTEXT + DATA + SCREEN + list/paragraph format
   ├── PreCallBriefingService
   │     ├── loadContext()        → Qdrant (full knowledge base, seed queries)
   │     └── generateBriefing()  → OpenAI API (gpt-5.5, active Mode prompt + meeting description as context)
@@ -524,20 +623,24 @@ DATABASE_URL=postgresql://admin:password@bore.pub:25649/localdb
 6. **Hotkey-triggered RAG flow** — Cmd+Enter slices transcript → query rewrite → hybrid retrieve (top 20) → dedup → Cohere rerank → drop below threshold → up to 8 → cited answer in overlay (no auto-detect)
 7. **Screen grounding** — ScreenContextService: on-demand native capture + OCR at hotkey (macOS ScreenCaptureKit+Vision / Windows Graphics Capture+Windows.Media.Ocr), injected as SCREEN block (parallel to embed, KB-only degrade)
 8. **Modes** — ModeService + local `modes.json`; custom system prompt swaps the default in generation + briefing
-9. **Retrieval tuning** — score thresholds, dedup, recency/source weighting; add HyDE if recall is still weak
+9. **Structured data routing** — BigQuery-mirror tables in Postgres; rewrite call emits `route`; catalog-grounded text-to-SQL over a read-only role with statement_timeout + LIMIT; SQL rows injected as the DATA block (parallel to Qdrant, best-effort degrade)
+10. **Retrieval tuning** — score thresholds, dedup, recency/source weighting; add HyDE if recall is still weak
 
 ---
 
 ## Key risks and mitigations
 
-| Risk                                      | Mitigation                                                                                                                                                                                    |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local DB / tunnel unreachable during call | 2s timeout, show "context unavailable" — never hang the overlay                                                                                                                               |
-| bore.pub Postgres tunnel drops            | Run the tunnel in a keepalive loop so it auto-reconnects: `while true; do bore local 5432 --to bore.pub; sleep 5; done` (note: assigned port can change on reconnect — update `DATABASE_URL`) |
-| Deepgram drops transcript                 | Rolling buffer still holds last clean segment; user can also type context manually in ManualInputBar                                                                                          |
-| Sync fails silently on the host laptop    | sync_runs table logs every run + errors; overlay shows "last synced Xh ago" in header                                                                                                         |
-| Screen share detects overlay              | Per-OS capture exclusion (macOS `sharingType=.none`/CGWindowLevel; Windows `WDA_EXCLUDEFROMCAPTURE`) — test against Zoom, Google Meet, Teams on both OSes before launch                       |
-| Credentials exposed in app bundle         | Acceptable for internal v1; add auth API layer before any external distribution                                                                                                               |
+| Risk                                                     | Mitigation                                                                                                                                                                                    |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local DB / tunnel unreachable during call                | 2s timeout, show "context unavailable" — never hang the overlay                                                                                                                               |
+| AI-generated SQL mutates or drops data                   | Electron apps use a read-only Postgres role (SELECT only) — DB rejects any write/DDL, even a hallucinated or prompt-injected `DELETE`/`DROP`                                                  |
+| AI-generated SQL hangs the overlay (slow full scan)      | `statement_timeout` (~2s) + `LIMIT` cap + `AbortSignal` on every query; on timeout the DATA block degrades to `(none)` and generation continues KB-only                                       |
+| Wrong routing (SQL question sent to Slack or vice-versa) | KB is fetched on every route regardless, so a misrouted question still has Slack context; route is `both` when ambiguous                                                                      |
+| bore.pub Postgres tunnel drops                           | Run the tunnel in a keepalive loop so it auto-reconnects: `while true; do bore local 5432 --to bore.pub; sleep 5; done` (note: assigned port can change on reconnect — update `DATABASE_URL`) |
+| Deepgram drops transcript                                | Rolling buffer still holds last clean segment; user can also type context manually in ManualInputBar                                                                                          |
+| Sync fails silently on the host laptop                   | sync_runs table logs every run + errors; overlay shows "last synced Xh ago" in header                                                                                                         |
+| Screen share detects overlay                             | Per-OS capture exclusion (macOS `sharingType=.none`/CGWindowLevel; Windows `WDA_EXCLUDEFROMCAPTURE`) — test against Zoom, Google Meet, Teams on both OSes before launch                       |
+| Credentials exposed in app bundle                        | Acceptable for internal v1; add auth API layer before any external distribution                                                                                                               |
 
 ---
 
@@ -549,4 +652,4 @@ DATABASE_URL=postgresql://admin:password@bore.pub:25649/localdb
 
 ---
 
-_Last updated: June 2026 — removed AWS/EC2 entirely (the cron now runs on the same dedicated always-on laptop as Postgres + Qdrant, writing to both on localhost; only the Electron apps use the ngrok/bore.pub tunnels); resolved the open decisions (single shared Qdrant index, no degraded-mode fallbacks, laptop hosting). Prior: narrowed sources to Slack only (dropped github/notion/pitch/google-docs and removed the Zendesk integration); expanded Slack scope to every thread/message + text attachments + channel canvases across the Dex + 36 BizOps channels; renamed `chunks` table to `document_chunks`. Earlier: migrated DBs from Qdrant Cloud + Supabase to self-hosted Docker on a dedicated always-on laptop (Qdrant :6333 exposed via ngrok static HTTPS, Postgres :5432 exposed via bore.pub TCP, data in Docker volumes); dropped authentication for v1; reworked cost/risk sections for the tunnel setup; synced transcript buffer to 120s / 12-turn + last-3-answers memory. Originally: revised to local RAG architecture + cron-only server + pre-call briefing naming; added Modes (custom system prompt, local store), list/paragraph output toggle, widget shell behaviors, and on-demand screen OCR grounding; expanded to cross-platform (macOS + Windows)_
+_Last updated: June 2026 — added structured data routing: BigQuery analytical tables (dim_experiences, dim_experience_listings, dim_experience_management, experience_listing_events, fct_zendesk_ops_tickets) mirrored into the same Postgres and queried live via catalog-grounded text-to-SQL. The rewrite call now also emits a route (slack | sql | both); Qdrant KB is fetched on every query, the SQL path runs in parallel only when needed, and rows are injected as a new DATA block in the answer prompt. SQL runs over a read-only Postgres role with a statement_timeout + LIMIT (live AI-generated SQL can never write/DROP and can never hang the overlay). User accepts ~2.5–3.5s on SQL questions for exact-number accuracy. Prior: removed AWS/EC2 entirely (the cron now runs on the same dedicated always-on laptop as Postgres + Qdrant, writing to both on localhost; only the Electron apps use the ngrok/bore.pub tunnels); resolved the open decisions (single shared Qdrant index, no degraded-mode fallbacks, laptop hosting). Prior: narrowed sources to Slack only (dropped github/notion/pitch/google-docs and removed the Zendesk integration); expanded Slack scope to every thread/message + text attachments + channel canvases across the Dex + 36 BizOps channels; renamed `chunks` table to `document_chunks`. Earlier: migrated DBs from Qdrant Cloud + Supabase to self-hosted Docker on a dedicated always-on laptop (Qdrant :6333 exposed via ngrok static HTTPS, Postgres :5432 exposed via bore.pub TCP, data in Docker volumes); dropped authentication for v1; reworked cost/risk sections for the tunnel setup; synced transcript buffer to 120s / 12-turn + last-3-answers memory. Originally: revised to local RAG architecture + cron-only server + pre-call briefing naming; added Modes (custom system prompt, local store), list/paragraph output toggle, widget shell behaviors, and on-demand screen OCR grounding; expanded to cross-platform (macOS + Windows)_
