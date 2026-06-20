@@ -5,7 +5,7 @@ import type { RetrievedChunk } from '@shared/types'
 
 export const SIM_THRESHOLD = 0.85
 export const MIN_SCORE = 0.3
-export const MAX_CHUNKS = 8
+export const MAX_CHUNKS = 15
 const RECENCY_WEIGHT = 0.05
 const SOURCE_BOOST = 0.04 // authoritative (e.g. pinned) sources win ties
 
