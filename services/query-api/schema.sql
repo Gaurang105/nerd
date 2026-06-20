@@ -99,3 +99,9 @@ CREATE TABLE IF NOT EXISTS fct_zendesk_ops_tickets (
   l1_categorisation TEXT,
   l2_categorisation TEXT
 );
+
+-- Full DDL comes from the mirror job; stub for local bootstrap.
+CREATE TABLE IF NOT EXISTS dim_vendor_tours (
+  vendor_tour_id TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ
+);

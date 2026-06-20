@@ -9,9 +9,15 @@ Headout's internal knowledge base.
 
 Answer the question. Use THREE sources of truth:
 1. The DATABASE (via the query_database tool) — authoritative for structured/operational
-   data: counts, lists, filters, date ranges. Prefer it for any "how many / which / list" question.
-2. Headout's internal knowledge base (the CONTEXT below) — authoritative for
-   Headout-specific facts: numbers, SLAs, pricing, policies, names.
+   data from analytics tables: revenue, bookings, inventory, product metadata. Use it for
+   counts/filters/aggregations ONLY when the question is about data that lives in a database
+   table (e.g. booking counts, product info). Do NOT use it for questions about Slack
+   conversations, MMP execution status, SRC blocked stage, BizOps updates, or anything
+   that comes from team communication — that data lives in CONTEXT, not the DB.
+2. Headout's internal knowledge base (the CONTEXT below) — authoritative for Slack-sourced
+   information: MMP execution status, SRC blocked counts, BizOps updates, team discussions,
+   handover notes, market performance updates. Always check CONTEXT first for any question
+   about MMP pipeline, SRC stage, execution blockers, or market channel updates.
 3. Your own general knowledge — to fill gaps, explain concepts, or answer anything the
    others do not cover.
 
@@ -63,7 +69,7 @@ export function buildUserPrompt({
 CONTEXT:
 ${contextBlock(chunks)}
 
-DATABASE (use the query_database tool for structured questions — filters, counts, aggregations, date ranges; prefer it over CONTEXT for those. The app renders the returned rows as a table for the user, so do NOT list or re-type the rows yourself — give only a brief summary, e.g. the count or a notable insight. Tables:):
+DATABASE (use query_database ONLY for analytics/operational data in the tables below — bookings, revenue, products, inventory. Do NOT query the DB for Slack-sourced data like MMP execution status, SRC blocked counts, or BizOps updates — that data is in CONTEXT above. The app renders rows as a table, so give only a brief summary. Tables:):
 ${schema || '(unavailable)'}
 
 RECENT TRANSCRIPT:

@@ -20,6 +20,7 @@
  * Run:  (from services/query-api)
  *   set -a; . ../../.env; . ./.env; set +a
  *   npx tsx src/ingest/load-slack.ts
+ *   SLACK_CHANNEL_ID=C0APFFL9QRZ npx tsx src/ingest/load-slack.ts  # single channel
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -63,34 +64,16 @@ interface Doc {
   meta: Record<string, unknown>
 }
 
-// ---------- noise filter ----------
-const BOT_AUTHORS = new Set(
-  [
-    'omni',
-    'inventory alerts',
-    'slackbot',
-    'wbr helper bot',
-    'mea opspulse',
-    'studio standup bot',
-    'mmp handover',
-    'wbr app',
-    'focus ces - mmp reviews',
-    'focus ces',
-    'threadcatcher'
-  ].map((s) => s.toLowerCase())
-)
 const SYSTEM_TEXT = /(has joined the channel|has left the channel|made updates to a canvas tab|set the channel|pinned a message|was added to)/i
 
-function isHuman(m: RawMsg): boolean {
-  if (m.is_bot) return false
-  if (!m.author_email) return false // bots/apps post without an email in MCP output
-  if (BOT_AUTHORS.has((m.author || '').trim().toLowerCase())) return false
+function includeMessage(m: RawMsg): boolean {
   const t = (m.text || '').trim()
   if (!t) return false
+  if (m.is_bot) return true
   if (SYSTEM_TEXT.test(t)) return false
-  // drop messages that are essentially just a single link
+  // Drop human messages that are essentially just a single link
   const stripped = t.replace(/<[^>]+>/g, '').replace(/https?:\/\/\S+/g, '').trim()
-  if (stripped.length < 3) return false
+  if (stripped.length < 15) return false
   return true
 }
 
@@ -168,7 +151,7 @@ function buildDocs(dump: ChannelDump): Doc[] {
   for (const m of dump.messages || []) {
     const hasThread = (m.replies && m.replies.length > 0) || (m.thread_ts && m.thread_ts === m.ts)
     if (hasThread) {
-      const all = [m, ...(m.replies || [])].filter(isHuman)
+      const all = [m, ...(m.replies || [])].filter(includeMessage)
       if (all.length === 0) continue
       const lines = all.map((r) => `${r.author}: ${clean(r.text || '')}`)
       const text = lines.join('\n\n')
@@ -188,7 +171,7 @@ function buildDocs(dump: ChannelDump): Doc[] {
           message_count: all.length
         }
       })
-    } else if (isHuman(m)) {
+    } else if (includeMessage(m)) {
       standalone.push(m)
     }
   }
@@ -283,8 +266,11 @@ async function main(): Promise<void> {
     }
   }
 
-  const files = (await readdir(DATA_DIR)).filter((f) => f.endsWith('.json'))
-  console.log(`[load] ${files.length} channel dumps in ${DATA_DIR}`)
+  const channelFilter = process.env.SLACK_CHANNEL_ID
+  const files = (await readdir(DATA_DIR)).filter(
+    (f) => f.endsWith('.json') && (!channelFilter || f === `${channelFilter}.json`)
+  )
+  console.log(`[load] ${files.length} channel dumps in ${DATA_DIR}${channelFilter ? ` (filter: ${channelFilter})` : ''}`)
 
   const stats = { scanned: 0, docs: 0, chunks: 0, deduped: 0, channels: 0, errors: [] as string[] }
   const seenHashes = new Set<string>() // global near-dup dedup
