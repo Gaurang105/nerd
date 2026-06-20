@@ -190,13 +190,61 @@
   font-weight: 600;
 }
 .ai-content .sources {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nerd-bubble);
+}
+.ai-content .sources-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--nerd-muted);
 }
-.ai-content .sources a {
+.ai-content .source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--nerd-bubble);
   color: var(--nerd-fg-secondary);
-  text-decoration: underline;
+  font-size: 12px;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.12s ease;
+}
+a.source-chip:hover {
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--nerd-fg);
+  transform: translateY(-1px);
+}
+.source-chip-icon {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+.source-chip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.source-chip-ext {
+  flex: 0 0 auto;
+  opacity: 0.5;
+}
+a.source-chip:hover .source-chip-ext {
+  opacity: 0.9;
 }
 
 .caret {

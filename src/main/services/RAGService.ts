@@ -10,7 +10,7 @@ import type {
 import { embed, generateWithTools, rewriteQuery, type ToolExecutor } from './openai'
 import { searchChunks } from './qdrant'
 import { rerank, selectTop } from './rerank'
-import { buildUserPrompt } from './prompts'
+import { buildUserPrompt, parseCitations } from './prompts'
 import { getSchema, runSqlTool, SQL_TOOL } from './sqlTool'
 import { toSqlResult } from './sqlTool-core'
 import { getActiveSystemPrompt } from '../mode/ModeService'
@@ -36,8 +36,6 @@ export interface AnswerRequest {
   answerMemory?: string
   /** Prior conversation turns replayed so follow-ups ("which ones?") resolve. */
   history?: ChatTurn[]
-  /** Resolves the SCREEN OCR text; awaited in parallel with rewrite/embed. */
-  screenText?: Promise<string>
   signal: AbortSignal
   onDelta: (p: PartialAnswer) => void
   /** Transient progress updates (e.g. "Querying database…"). Optional for non-UI callers. */
@@ -98,19 +96,12 @@ export async function answer(req: AnswerRequest): Promise<FinalAnswer> {
       source: c.source
     }))
 
-    // Screen OCR ran in parallel (kicked at hotkey); collect it now, best-effort.
-    let screenText = '(none)'
-    if (req.screenText) {
-      screenText = await req.screenText.catch(() => '')
-    }
-
     const schema = await schemaPromise
 
     const userPrompt = buildUserPrompt({
       question,
       chunks,
       format,
-      screenText,
       transcript: req.transcript,
       answerMemory: req.answerMemory,
       schema
@@ -138,7 +129,14 @@ export async function answer(req: AnswerRequest): Promise<FinalAnswer> {
       return res.raw
     }
 
-    let text = ''
+    // The model ends its reply with a `SOURCES: [..]` line declaring which CONTEXT items
+    // it actually used (see buildUserPrompt). We must keep that sentinel out of the visible
+    // stream: hold back a guard-sized tail so a sentinel split across deltas never leaks,
+    // and once the full sentinel appears stop forwarding past it entirely.
+    const SENTINEL = /\n\s*SOURCES:\s*\[/
+    const GUARD = '\nSOURCES: ['.length
+    let full = ''
+    let emitted = 0
     for await (const delta of generateWithTools(
       getActiveSystemPrompt(),
       userPrompt,
@@ -148,15 +146,30 @@ export async function answer(req: AnswerRequest): Promise<FinalAnswer> {
       safety.signal
     )) {
       if (safety.signal.aborted) break
-      text += delta
-      onDelta({ requestId, delta })
+      full += delta
+      const cut = full.search(SENTINEL)
+      const safeEnd = cut >= 0 ? cut : full.length - GUARD
+      if (safeEnd > emitted) {
+        onDelta({ requestId, delta: full.slice(emitted, safeEnd) })
+        emitted = safeEnd
+      }
     }
+
+    // Strip the citation line and resolve which chunks were actually cited. A missing
+    // line (model ignored the format) falls back to all retrieved chunks so we never
+    // regress below prior behavior; a well-formed `SOURCES: []` correctly cites nothing.
+    const { cited, text } = parseCitations(full)
+    if (text.length > emitted && !safety.signal.aborted) {
+      onDelta({ requestId, delta: text.slice(emitted) })
+    }
+    const citedSources =
+      cited === null ? chunkSources : chunkSources.filter((_, i) => cited.has(i))
 
     // A successful DB query makes the answer DB-grounded; don't cite KB chunks then, since
     // they'd imply the data came from Slack. The exact SQL stays visible in the table caption.
     const sources: AnswerSource[] =
-      sqlOk > 0 ? [{ source: 'database', docTitle: 'Database', url: '' }] : chunkSources
-    const grounded = sqlOk > 0 || chunkSources.length > 0
+      sqlOk > 0 ? [{ source: 'database', docTitle: 'Database', url: '' }] : citedSources
+    const grounded = sqlOk > 0 || citedSources.length > 0
 
     console.info(
       '[RAG] answer',

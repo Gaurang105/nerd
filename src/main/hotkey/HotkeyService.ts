@@ -1,18 +1,18 @@
 import { globalShortcut } from 'electron'
 import { transcripts } from '../audio/transcriptBuffer'
-import { captureScreenText } from '../screen/ScreenContextService'
 import { loadSettings } from '../config/store'
 import type { AnswerCoordinator } from '../services/AnswerCoordinator'
 
 /**
- * Cmd+Enter: slice the hot transcript + last answers, kick screen OCR in parallel,
- * and run the RAG pipeline (rewrite on, since the transcript slice is noisy).
+ * Cmd+Enter: slice the hot transcript + last answers and run the RAG pipeline
+ * (rewrite on, since the transcript slice is noisy).
  */
 export class HotkeyService {
   constructor(private readonly coordinator: AnswerCoordinator) {}
 
   register(): void {
-    globalShortcut.register('CommandOrControl+Enter', () => this.trigger())
+    const ok = globalShortcut.register('CommandOrControl+Enter', () => this.trigger())
+    if (!ok) console.warn('[hotkey] failed to register CommandOrControl+Enter')
   }
 
   private trigger(): void {
@@ -23,7 +23,7 @@ export class HotkeyService {
       rewrite: true,
       transcript,
       answerMemory: transcripts.recentAnswers(),
-      screenText: captureScreenText() // parallel; hides under rewrite/embed
+      label: 'Assist' // tells the renderer to render the in-flight hotkey turn
     })
   }
 }

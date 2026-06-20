@@ -1,6 +1,6 @@
 # nerd — "Know it all"
 
-A real-time meeting copilot: a floating, always-on-top desktop overlay (macOS + Windows) that listens to a call, and on `⌘+Enter` answers from the recent conversation — grounded in Headout's synced Slack knowledge base, with on-demand screen OCR. Hidden mode keeps it invisible to screen-share viewers.
+A real-time meeting copilot: a floating, always-on-top desktop overlay (macOS + Windows) that listens to a call, and on `⌘+Enter` answers from the recent conversation — grounded in Headout's synced Slack knowledge base. Hidden mode keeps it invisible to screen-share viewers.
 
 Built with Electron + React + Vite. The knowledge base is kept fresh by a separate host-laptop Slack sync job (planned).
 
@@ -26,7 +26,7 @@ $ npm run dev
 $ npm run check       # runnable self-checks (rerank + transcript buffer)
 $ npm run typecheck
 $ npm run lint
-$ npm run build       # also builds the macOS OCR helper
+$ npm run build
 ```
 
 ### Package

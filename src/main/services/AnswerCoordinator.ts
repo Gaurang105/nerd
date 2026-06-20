@@ -3,7 +3,10 @@ import { answer, type AnswerRequest } from './RAGService'
 import { transcripts } from '../audio/transcriptBuffer'
 import { CH } from '../ipc/channels'
 
-type RunOptions = Omit<AnswerRequest, 'requestId' | 'signal' | 'onDelta'>
+type RunOptions = Omit<AnswerRequest, 'requestId' | 'signal' | 'onDelta'> & {
+  /** When set (hotkey flow), announce the in-flight request to the renderer so it renders the turn. */
+  label?: string
+}
 
 /**
  * Owns the single in-flight answer request shared by both the manual Q&A and the
@@ -22,8 +25,11 @@ export class AnswerCoordinator {
     this.current = ac
     const requestId = this.nextId++
 
+    const { label, ...answerOpts } = opts
+    if (label !== undefined) this.send(CH.answerBegin, { requestId, label })
+
     void answer({
-      ...opts,
+      ...answerOpts,
       requestId,
       signal: ac.signal,
       onDelta: (p: PartialAnswer) => this.send(CH.answerPartial, p),

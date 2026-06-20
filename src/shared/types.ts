@@ -23,15 +23,16 @@ export interface Mode {
 export type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
 /** Actions dispatched to the renderer from main-registered global shortcuts. */
-export type ShortcutAction = 'toggleSession' | 'openSettings'
+export type ShortcutAction = 'toggleSession' | 'openSettings' | 'newChat'
 
 /** User-rebindable global shortcuts. Each is Cmd/Ctrl + the stored single key. */
-export type ShortcutId = 'openSettings' | 'hide' | 'toggleSession'
+export type ShortcutId = 'openSettings' | 'hide' | 'toggleSession' | 'newChat'
 export type ShortcutMap = Record<ShortcutId, string>
 export const DEFAULT_SHORTCUTS: ShortcutMap = {
   openSettings: '.',
   hide: '\\',
-  toggleSession: 't'
+  toggleSession: 't',
+  newChat: 'n'
 }
 
 export type Theme = 'light' | 'dark'
@@ -115,6 +116,12 @@ export interface BriefingResult {
   sourcesLoaded: number
 }
 
+/** Announces a main-initiated request (e.g. the hotkey) so the renderer renders its in-flight turn. */
+export interface AnswerBegin {
+  requestId: number
+  label: string
+}
+
 /** Streaming token delta pushed during generation. */
 export interface PartialAnswer {
   requestId: number
@@ -152,6 +159,7 @@ export interface NerdAPI {
   askManually: (question: string, format: OutputFormat, history?: ChatTurn[]) => Promise<number>
   setOutputFormat: (format: OutputFormat) => Promise<void>
   // Streaming subscriptions (return an unsubscribe fn)
+  onAnswerBegin: (cb: (b: AnswerBegin) => void) => () => void
   onPartialAnswer: (cb: (p: PartialAnswer) => void) => () => void
   onAnswerStatus: (cb: (s: StatusEvent) => void) => () => void
   onAnswer: (cb: (a: FinalAnswer) => void) => () => void

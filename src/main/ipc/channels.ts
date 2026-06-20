@@ -3,6 +3,7 @@ export const CH = {
   briefingRun: 'briefing:run',
   briefingReady: 'briefing:ready',
   answerAsk: 'answer:ask',
+  answerBegin: 'answer:begin',
   answerPartial: 'answer:partial',
   answerStatus: 'answer:status',
   answerFinal: 'answer:final',

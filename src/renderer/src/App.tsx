@@ -9,13 +9,6 @@ import { BackIcon, ExpandIcon, SendIcon, WaveformIcon } from './components/icons
 import { useFitWindow } from './useFitWindow'
 import * as audio from './audio/capture'
 
-const SCREEN_QUESTION = 'What am I currently seeing on my screen?'
-// cmd+Enter "Assist": send a context-grounded prompt but show a short "Assist" bubble.
-const ASSIST_PROMPT =
-  'Assist me with what is currently on my screen and in this conversation. ' +
-  'If it relates to Headout, use Headout knowledge; otherwise answer generally.'
-const ASSIST_LABEL = 'Assist'
-
 function mmss(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
@@ -65,6 +58,18 @@ function App(): React.JSX.Element {
     void window.nerd.getSettings().then((s) => setHidden(s.hidden))
     void window.nerd.listModes().then(setModes)
 
+    // A main-initiated request (the cmd+Enter hotkey) announces itself here so the
+    // in-flight turn renders and streams just like a manual ask. Expand if collapsed.
+    const offBegin = window.nerd.onAnswerBegin((b) => {
+      reqId.current = b.requestId
+      setQuestion(b.label)
+      setAnswerText('')
+      setStatus('')
+      setStreaming(true)
+      setModesOpen(false)
+      setCollapsed(false)
+      void window.nerd.setCollapsed(false)
+    })
     const offPartial = window.nerd.onPartialAnswer((p) => {
       if (p.requestId < reqId.current) return
       if (p.requestId > reqId.current) {
@@ -101,6 +106,7 @@ function App(): React.JSX.Element {
     const offTranscript = window.nerd.onTranscript(setTranscript)
     const offCollapsed = window.nerd.onCollapsedChanged(setCollapsed)
     return () => {
+      offBegin()
       offPartial()
       offStatus()
       offAnswer()
@@ -210,6 +216,9 @@ function App(): React.JSX.Element {
           setSettingsTab('general')
           setShowSettings((v) => !v)
           break
+        case 'newChat':
+          newChat()
+          break
         default: {
           const _exhaustive: never = action
           return _exhaustive
@@ -219,14 +228,12 @@ function App(): React.JSX.Element {
   })
   useEffect(() => window.nerd.onShortcut((a) => shortcutRef.current(a)), [])
 
-  // Tab reveals the hidden composer; cmd/ctrl+Enter fires the "Assist" action.
+  // Tab reveals the hidden composer. The cmd+Enter "Assist" hotkey is a global shortcut
+  // handled in the main process (it must fire while the overlay is unfocused mid-call).
   useEffect(() => {
     if (showSettings || collapsed) return
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault()
-        void ask(ASSIST_PROMPT, ASSIST_LABEL)
-      } else if (e.key === 'Tab' && !composerOpen) {
+      if (e.key === 'Tab' && !composerOpen) {
         e.preventDefault()
         revealComposer()
       }
@@ -326,7 +333,6 @@ function App(): React.JSX.Element {
         elapsed={mmss(elapsed)}
         newChatLabel={!hasThread}
         onToggleModes={() => setModesOpen((v) => !v)}
-        onScreen={() => void ask(SCREEN_QUESTION)}
         onToggleHidden={toggleHidden}
         onToggleListening={toggleListening}
         onToggleTranscript={() => setShowTranscript((v) => !v)}

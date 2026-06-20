@@ -127,6 +127,7 @@ export class WindowService {
     const handlers: Record<ShortcutId, () => void> = {
       openSettings: () => this.sendShortcut('openSettings'),
       toggleSession: () => this.sendShortcut('toggleSession'),
+      newChat: () => this.sendShortcut('newChat'),
       hide: () => this.toggleVisible()
     }
     const { shortcuts } = loadSettings()

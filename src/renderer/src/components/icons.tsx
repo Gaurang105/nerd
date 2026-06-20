@@ -40,16 +40,6 @@ export const ModesIcon = ({ size = 16, className }: IconProps): React.JSX.Elemen
     </>
   )
 
-export const MonitorIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
-  svg(
-    size,
-    className,
-    <>
-      <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" />
-      <path d="M5.5 14h5M8 11.5V14" />
-    </>
-  )
-
 export const EyeIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
   svg(
     size,
@@ -232,3 +222,36 @@ export const EditIcon = ({ size = 16, className }: IconProps): React.JSX.Element
       <path d="M11 2.5l2.5 2.5L6 12.5l-3 .5.5-3L11 2.5z" />
     </>
   )
+
+export const LinkIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5l-1 1" />
+      <path d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0l-2 2a2.5 2.5 0 0 0 3.5 3.5l1-1" />
+    </>
+  )
+
+export const DatabaseIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
+  svg(
+    size,
+    className,
+    <>
+      <ellipse cx="8" cy="3.5" rx="5" ry="2" />
+      <path d="M3 3.5v5c0 1.1 2.2 2 5 2s5-.9 5-2v-5" />
+      <path d="M3 8.5v4c0 1.1 2.2 2 5 2s5-.9 5-2v-4" />
+    </>
+  )
+
+export const SlackIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
+  svg(
+    size,
+    className,
+    <>
+      <path d="M6 2.5v7M10 6.5v7M3 6h7M6.5 10h7" />
+    </>
+  )
+
+export const ArrowUpRightIcon = ({ size = 16, className }: IconProps): React.JSX.Element =>
+  svg(size, className, <path d="M5 11l6-6M6 5h5v5" />)

@@ -26,7 +26,8 @@ const TABS: { id: Tab; label: string; Icon: typeof GearIcon }[] = [
 const SHORTCUT_DEFS: { id: ShortcutId; label: string }[] = [
   { id: 'openSettings', label: 'Open settings' },
   { id: 'hide', label: 'Hide Nerd' },
-  { id: 'toggleSession', label: 'Stop and start Nerd session' }
+  { id: 'toggleSession', label: 'Stop and start Nerd session' },
+  { id: 'newChat', label: 'Start new chat' }
 ]
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }): React.JSX.Element {

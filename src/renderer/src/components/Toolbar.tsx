@@ -1,6 +1,5 @@
 import {
   ModesIcon,
-  MonitorIcon,
   EyeIcon,
   EyeOffIcon,
   WaveformIcon,
@@ -18,7 +17,6 @@ interface Props {
   elapsed: string
   newChatLabel: boolean
   onToggleModes: () => void
-  onScreen: () => void
   onToggleHidden: () => void
   onToggleListening: () => void
   onToggleTranscript: () => void
@@ -33,7 +31,6 @@ function Toolbar({
   elapsed,
   newChatLabel,
   onToggleModes,
-  onScreen,
   onToggleHidden,
   onToggleListening,
   onToggleTranscript,
@@ -48,9 +45,6 @@ function Toolbar({
           onClick={onToggleModes}
         >
           <ModesIcon />
-        </button>
-        <button className="icon-btn tip-start" data-tip="Answer about my screen" onClick={onScreen}>
-          <MonitorIcon size={14} />
         </button>
         <button
           className={`icon-btn ${hidden ? 'on' : ''}`}

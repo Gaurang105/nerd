@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
+  AnswerBegin,
   Appearance,
   BriefingResult,
   Corner,
@@ -28,6 +29,7 @@ const nerd: NerdAPI = {
   askManually: (question, format, history) =>
     ipcRenderer.invoke(CH.answerAsk, question, format, history),
   setOutputFormat: (format: OutputFormat) => ipcRenderer.invoke(CH.setFormat, format),
+  onAnswerBegin: (cb) => subscribe<AnswerBegin>(CH.answerBegin, cb),
   onPartialAnswer: (cb) => subscribe<PartialAnswer>(CH.answerPartial, cb),
   onAnswerStatus: (cb) => subscribe<StatusEvent>(CH.answerStatus, cb),
   onAnswer: (cb) => subscribe<FinalAnswer>(CH.answerFinal, cb),

@@ -1,6 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { FinalAnswer, SqlResult, TranscriptTurn } from '@shared/types'
-import { PersonIcon, ArrowUpIcon } from './icons'
+import type { AnswerSource, FinalAnswer, SqlResult, TranscriptTurn } from '@shared/types'
+import {
+  PersonIcon,
+  ArrowUpIcon,
+  ArrowUpRightIcon,
+  DatabaseIcon,
+  LinkIcon,
+  SlackIcon
+} from './icons'
 
 export interface QATurn {
   question: string | null
@@ -20,6 +27,55 @@ interface Props {
 function cell(value: unknown): string {
   if (value == null) return ''
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
+}
+
+function sourceIcon(source: string): (p: { size?: number; className?: string }) => React.JSX.Element {
+  switch (source) {
+    case 'database':
+      return DatabaseIcon
+    case 'slack':
+      return SlackIcon
+    default:
+      return LinkIcon
+  }
+}
+
+/** Citation chips shown under a grounded answer. */
+function Sources({ sources }: { sources: AnswerSource[] }): React.JSX.Element {
+  return (
+    <div className="sources">
+      <span className="sources-label">Sources</span>
+      <div className="source-chips">
+        {sources.map((s, j) => {
+          const label = s.docTitle || s.source
+          const Icon = sourceIcon(s.source)
+          const inner = (
+            <>
+              <Icon size={12} className="source-chip-icon" />
+              <span className="source-chip-label">{label}</span>
+              {s.url && <ArrowUpRightIcon size={11} className="source-chip-ext" />}
+            </>
+          )
+          return s.url ? (
+            <a
+              key={j}
+              className="source-chip"
+              href={s.url}
+              target="_blank"
+              rel="noreferrer"
+              title={label}
+            >
+              {inner}
+            </a>
+          ) : (
+            <span key={j} className="source-chip" title={label}>
+              {inner}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 /** Render a query_database result as a real table, straight from the DB rows. */
@@ -118,21 +174,7 @@ function ChatThread({ turns, transcript, showTranscript, status }: Props): React
                     </p>
                     {turn.final?.data?.map((r, k) => <SqlTable key={k} result={r} />)}
                     {turn.final && !turn.final.error && turn.final.sources.length > 0 && (
-                      <div className="sources">
-                        Sources:{' '}
-                        {turn.final.sources.map((s, j) => (
-                          <span key={j}>
-                            {j > 0 && ', '}
-                            {s.url ? (
-                              <a href={s.url} target="_blank" rel="noreferrer">
-                                {s.docTitle || s.source}
-                              </a>
-                            ) : (
-                              s.docTitle || s.source
-                            )}
-                          </span>
-                        ))}
-                      </div>
+                      <Sources sources={turn.final.sources} />
                     )}
                   </div>
                 </div>
