@@ -20,6 +20,7 @@ export interface RetrievedChunk {
   score: number
   updatedAt: number
   pinned: boolean
+  channelName: string
 }
 
 interface ChunkPayload {
@@ -29,7 +30,7 @@ interface ChunkPayload {
   url?: string
   text?: string
   updated_at?: number | string
-  source_metadata?: { pinned?: boolean }
+  source_metadata?: { pinned?: boolean; channel_name?: string }
 }
 
 export async function searchByVector(vector: number[], limit = 20): Promise<RetrievedChunk[]> {
@@ -51,7 +52,8 @@ export async function searchByVector(vector: number[], limit = 20): Promise<Retr
       score: p.score ?? 0,
       updatedAt:
         typeof pl.updated_at === 'string' ? Date.parse(pl.updated_at) : (pl.updated_at ?? 0),
-      pinned: pl.source_metadata?.pinned ?? false
+      pinned: pl.source_metadata?.pinned ?? false,
+      channelName: pl.source_metadata?.channel_name ?? ''
     }
   })
 }

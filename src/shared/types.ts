@@ -76,6 +76,8 @@ export interface RetrievedChunk {
   updatedAt: number
   /** Authoritative signal from source_metadata (e.g. a pinned Slack message). */
   pinned?: boolean
+  /** Slack channel name (e.g. "mkt-uk") — populated for source:'slack' chunks. */
+  channelName?: string
 }
 
 /** One prior conversation turn replayed to the model for follow-up context. */

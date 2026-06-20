@@ -40,7 +40,10 @@ export function formatInstruction(format: OutputFormat): string {
 export function contextBlock(chunks: RetrievedChunk[]): string {
   if (chunks.length === 0) return '(none)'
   return chunks
-    .map((c, i) => `[${i + 1}] (${c.source} — ${c.docTitle || 'untitled'})\n${c.text}`)
+    .map((c, i) => {
+      const ch = c.channelName || c.source
+      return `[${i + 1}] (${ch} — ${c.docTitle || 'untitled'})\n${c.text}`
+    })
     .join('\n\n')
 }
 

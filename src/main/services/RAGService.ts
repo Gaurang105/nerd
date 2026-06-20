@@ -75,7 +75,7 @@ export async function answer(req: AnswerRequest): Promise<FinalAnswer> {
     const vector = await stage('embed', BUDGET.embed, safety.signal, (s) => embed(question, s))
 
     let chunks = await stage('retrieve', BUDGET.retrieve, safety.signal, () =>
-      searchChunks(vector, 20)
+      searchChunks(vector, 40)
     ).catch((err) => {
       console.error('[RAG] retrieve failed, going KB-less', err)
       return []
