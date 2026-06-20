@@ -1,171 +1,478 @@
 @import './base.css';
 
-body {
+.nerd-overlay {
+  position: relative;
+  width: 100vw;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background-image: url('./wavy-lines.svg');
-  background-size: cover;
-  user-select: none;
-}
-
-code {
-  font-weight: 600;
-  padding: 3px 5px;
-  border-radius: 2px;
-  background-color: var(--color-background-mute);
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace;
-  font-size: 85%;
-}
-
-#root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-direction: column;
-  margin-bottom: 80px;
-}
-
-.logo {
-  margin-bottom: 20px;
-  -webkit-user-drag: none;
-  height: 128px;
-  width: 128px;
-  will-change: filter;
-  transition: filter 300ms;
-}
-
-.logo:hover {
-  filter: drop-shadow(0 0 1.2em #6988e6aa);
-}
-
-.creator {
-  font-size: 14px;
-  line-height: 16px;
-  color: var(--ev-c-text-2);
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
-.text {
-  font-size: 28px;
-  color: var(--ev-c-text-1);
-  font-weight: 700;
-  line-height: 32px;
-  text-align: center;
-  margin: 0 10px;
-  padding: 16px 0;
-}
-
-.tip {
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--ev-c-text-2);
-  font-weight: 600;
-}
-
-.react {
-  background: -webkit-linear-gradient(315deg, #087ea4 55%, #7c93ee);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
-}
-
-.ts {
-  background: -webkit-linear-gradient(315deg, #3178c6 45%, #f0dc4e);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
-}
-
-.actions {
-  display: flex;
-  padding-top: 32px;
-  margin: -6px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-.action {
-  flex-shrink: 0;
-  padding: 6px;
-}
-
-.action a {
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-  border: 1px solid transparent;
-  text-align: center;
-  font-weight: 600;
-  white-space: nowrap;
-  border-radius: 20px;
-  padding: 0 20px;
-  line-height: 38px;
-  font-size: 14px;
-  border-color: var(--ev-button-alt-border);
-  color: var(--ev-button-alt-text);
-  background-color: var(--ev-button-alt-bg);
-}
-
-.action a:hover {
-  border-color: var(--ev-button-alt-hover-border);
-  color: var(--ev-button-alt-hover-text);
-  background-color: var(--ev-button-alt-hover-bg);
-}
-
-.versions {
-  position: absolute;
-  bottom: 30px;
-  margin: 0 auto;
-  padding: 15px 0;
-  font-family: 'Menlo', 'Lucida Console', monospace;
-  display: inline-flex;
+  border-radius: var(--nerd-radius);
   overflow: hidden;
+  backdrop-filter: blur(var(--nerd-blur));
+  -webkit-backdrop-filter: blur(var(--nerd-blur));
+  filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.08));
+}
+
+/* ---- top hint bar (drag region) ---- */
+.nerd-topbar {
+  -webkit-app-region: drag;
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
-  border-radius: 22px;
-  background-color: #202127;
-  backdrop-filter: blur(24px);
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--nerd-bar);
 }
-
-.versions li {
-  display: block;
-  float: left;
-  border-right: 1px solid var(--ev-c-gray-1);
-  padding: 0 20px;
+/* Idle (no conversation): darker hint bar with more padding, per frame 31:560. */
+.nerd-topbar.idle {
+  padding: 14px;
+  background: var(--nerd-body);
+}
+.nerd-topbar .hint {
   font-size: 14px;
-  line-height: 14px;
-  opacity: 0.8;
-  &:last-child {
-    border: none;
+  color: var(--nerd-hint);
+  line-height: 1.3;
+}
+.nerd-topbar .icon-btn {
+  -webkit-app-region: no-drag;
+}
+
+/* ---- body (thread + composer) ---- */
+.nerd-body {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--nerd-body);
+  padding: 14px;
+  gap: 12px;
+}
+
+.nerd-thread {
+  position: relative;
+  flex: 0 1 auto;
+  max-height: 240px;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.nerd-thread::-webkit-scrollbar {
+  width: 6px;
+}
+.nerd-thread::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+}
+
+.thread-scroll-top {
+  -webkit-app-region: no-drag;
+  position: sticky;
+  bottom: 0;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--nerd-fg-secondary);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.thread-scroll-top:hover {
+  opacity: 1;
+  color: #fff;
+}
+
+.thread-empty {
+  color: var(--nerd-muted);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.msg {
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  user-select: text;
+}
+.msg.user {
+  justify-content: flex-end;
+}
+.msg.user .bubble {
+  background: var(--nerd-bubble);
+  border-radius: 4px;
+  padding: 4px 12px 4px 8px;
+  color: var(--nerd-fg);
+}
+.msg.ai {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.msg .msg-avatar {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--nerd-fg);
+}
+.msg.ai .ai-content,
+.msg.ai p {
+  color: var(--nerd-fg);
+}
+.msg.ai .ai-content p {
+  /* Preserve newlines so bulleted/multi-line answers render as separate lines. */
+  white-space: pre-wrap;
+}
+.msg.ai p.err {
+  color: #ff8585;
+}
+.msg.transcript {
+  opacity: 0.85;
+}
+.msg.transcript .who {
+  color: var(--nerd-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+.msg.transcript.interim {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.ai-content .status {
+  color: var(--nerd-muted);
+  font-style: italic;
+}
+.sql-result {
+  margin-top: 8px;
+}
+.sql-result .sql-query {
+  font-size: 12px;
+  color: var(--nerd-muted);
+  margin-bottom: 4px;
+}
+.sql-result .sql-query summary {
+  cursor: pointer;
+}
+.sql-result .sql-query pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--nerd-bubble);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+.sql-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--nerd-bubble);
+  border-radius: 4px;
+}
+.sql-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+.sql-table th,
+.sql-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--nerd-bubble);
+  white-space: nowrap;
+}
+.sql-table th {
+  position: sticky;
+  top: 0;
+  background: var(--nerd-bubble);
+  color: var(--nerd-fg);
+  font-weight: 600;
+}
+.ai-content .sources {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nerd-bubble);
+}
+.ai-content .sources-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nerd-muted);
+}
+.ai-content .source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--nerd-bubble);
+  color: var(--nerd-fg-secondary);
+  font-size: 12px;
+  line-height: 1.2;
+  text-decoration: none;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.12s ease;
+}
+a.source-chip:hover {
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--nerd-fg);
+  transform: translateY(-1px);
+}
+.source-chip-icon {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+.source-chip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.source-chip-ext {
+  flex: 0 0 auto;
+  opacity: 0.5;
+}
+a.source-chip:hover .source-chip-ext {
+  opacity: 0.9;
+}
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--nerd-fg);
+  animation: nerd-blink 1s steps(2, start) infinite;
+}
+@keyframes nerd-blink {
+  50% {
+    opacity: 0;
   }
 }
 
-@media (max-width: 720px) {
-  .text {
-    font-size: 20px;
+/* ---- composer ---- */
+.nerd-composer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.composer-input {
+  -webkit-app-region: no-drag;
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--nerd-fg);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 0;
+  user-select: text;
+}
+.composer-input::placeholder {
+  color: var(--nerd-hint);
+}
+.composer-input:focus {
+  outline: none;
+}
+
+/* ---- footer toolbar ---- */
+.nerd-footer {
+  -webkit-app-region: drag;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  padding: 10px 14px;
+  background: var(--nerd-bar);
+}
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.icon-btn {
+  -webkit-app-region: no-drag;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--nerd-fg-secondary);
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+/* Instant tooltips (native title has a slow OS delay). */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: -0.36px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 50;
+  transition: opacity 0.08s ease;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+}
+[data-tip].tip-end::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+[data-tip].tip-start::after {
+  left: 0;
+  right: auto;
+  transform: none;
+}
+.icon-btn:hover {
+  opacity: 1;
+  color: var(--nerd-fg);
+}
+.icon-btn.on {
+  opacity: 1;
+  color: #fff;
+}
+.icon-btn.live {
+  color: #ff5c5c;
+  opacity: 1;
+}
+.icon-btn.send {
+  color: var(--nerd-fg);
+}
+.icon-btn.new-chat {
+  gap: 8px;
+  color: var(--nerd-fg-secondary);
+}
+.new-chat-label {
+  font-size: 12px;
+  letter-spacing: -0.36px;
+}
+
+.rec-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rec-dot {
+  color: #ff5c5c;
+  animation: nerd-pulse 1.4s ease-in-out infinite;
+}
+.timer {
+  font-size: 14px;
+  color: var(--nerd-fg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes nerd-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
   }
 }
 
-@media (max-width: 620px) {
-  .versions {
-    display: none;
-  }
+/* ---- mode dropdown (in-flow, drops below the toolbar / modes icon) ---- */
+.mode-dropdown {
+  -webkit-app-region: no-drag;
+  align-self: flex-start;
+  margin: 0 0 10px;
+  min-width: 160px;
+  background: rgba(18, 18, 20, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.mode-item {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--nerd-fg-secondary);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: -0.36px;
+  text-align: left;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.mode-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.mode-item.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.mode-item.muted {
+  color: var(--nerd-muted);
+  cursor: default;
+}
+.mode-item.add {
+  color: var(--nerd-muted);
+  border-top: 1px solid var(--nerd-line);
 }
 
-@media (max-width: 350px) {
-  .tip,
-  .actions {
-    display: none;
-  }
+/* ---- collapsed pill ---- */
+.nerd-pill {
+  height: 100vh;
+  width: 100vw;
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--nerd-body);
+  backdrop-filter: blur(var(--nerd-blur));
+  -webkit-backdrop-filter: blur(var(--nerd-blur));
+  border-radius: 999px;
 }
+.nerd-pill .brand {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--nerd-fg);
+}
+.nerd-pill .pill-live {
+  color: #ff5c5c;
+}
+.nerd-pill .spacer {
+  flex: 1;
+}
+

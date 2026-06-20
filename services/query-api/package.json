@@ -1,0 +1,25 @@
+{
+  "name": "@nerd/query-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dead-simple local gateway: execute AI-generated read-only SQL + proxy Qdrant vector search.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.11.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.1.0",
+    "gpt-tokenizer": "^3.4.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

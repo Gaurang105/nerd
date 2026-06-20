@@ -1,16 +1,16 @@
 {
   "name": "nerd",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "nerd — real-time meeting copilot (floating desktop overlay)",
   "main": "./out/main/index.js",
   "author": "headout",
-  "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "check": "tsx src/main/services/rerank.check.ts && tsx src/main/audio/transcriptBuffer.check.ts && tsx src/main/services/displayFollow.check.ts",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -21,15 +21,21 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@deepgram/sdk": "^5.4.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.8.9"
+    "@qdrant/js-client-rest": "^1.18.0",
+    "cohere-ai": "^8.0.0",
+    "electron-audio-loopback": "^1.0.6",
+    "openai": "^6.44.0",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@types/node": "^22.19.1",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -43,6 +49,7 @@
     "prettier": "^3.7.4",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
   },

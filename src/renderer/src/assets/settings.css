@@ -1,0 +1,321 @@
+.settings {
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 32px;
+  background: var(--nerd-panel);
+  backdrop-filter: blur(var(--nerd-blur));
+  -webkit-backdrop-filter: blur(var(--nerd-blur));
+  border-radius: var(--nerd-radius);
+  overflow: hidden;
+}
+.settings button,
+.settings input,
+.settings textarea,
+.settings select {
+  -webkit-app-region: no-drag;
+}
+
+/* ---- header + tabs ---- */
+.settings-head {
+  -webkit-app-region: drag;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-title {
+  font-size: 16px;
+  text-align: center;
+  color: var(--nerd-fg);
+  letter-spacing: -0.48px;
+}
+.settings-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 20px;
+}
+.settings-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 73px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--nerd-fg-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.settings-tab.active {
+  background: var(--nerd-tab-active);
+  color: #fff;
+}
+
+/* ---- generic content area ---- */
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ---- general tab ---- */
+.general-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--nerd-line);
+  border-bottom: 1px solid var(--nerd-line);
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.setting-row .meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.setting-row .meta .label {
+  font-size: 14px;
+  color: var(--nerd-fg);
+}
+.setting-row .meta .desc {
+  font-size: 12px;
+  color: var(--nerd-muted);
+  letter-spacing: -0.36px;
+}
+
+/* toggle */
+.toggle {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toggle .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.toggle.on {
+  background: rgba(255, 255, 255, 0.85);
+}
+.toggle.on .knob {
+  transform: translateX(12px);
+  background: #111;
+}
+
+/* dropdown / button control */
+.control-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  width: 120px;
+  padding: 4px 6px 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--nerd-bubble);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  color: var(--nerd-fg-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.control-pill.between {
+  justify-content: space-between;
+}
+
+/* footer actions */
+.settings-footer {
+  align-self: flex-end;
+  display: flex;
+  justify-content: flex-end;
+  gap: 36px;
+}
+.footer-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  color: var(--nerd-action);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.footer-action:hover {
+  color: var(--nerd-fg);
+}
+
+/* ---- modes tab ---- */
+.modes-layout {
+  display: flex;
+  gap: 0;
+  height: 360px;
+  border-top: 1px solid var(--nerd-line);
+  border-bottom: 1px solid var(--nerd-line);
+  padding: 24px 0;
+}
+.modes-list {
+  flex: 0 0 141px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--nerd-line);
+}
+.mode-list-item {
+  text-align: left;
+  border: none;
+  background: none;
+  color: #777;
+  font: inherit;
+  font-size: 14px;
+  padding: 11px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mode-list-item:hover {
+  color: var(--nerd-fg-secondary);
+}
+.mode-list-item.active {
+  background: none;
+  color: #fff;
+}
+.modes-detail {
+  flex: 1;
+  min-width: 0;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modes-detail .mode-title {
+  font-size: 20px;
+  color: var(--nerd-fg);
+  background: none;
+  border: none;
+  font-family: inherit;
+  padding: 0;
+}
+.modes-detail .mode-title:focus {
+  outline: none;
+}
+.modes-detail .mode-desc {
+  flex: 1;
+  min-height: 120px;
+  resize: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--nerd-line);
+  border-radius: 8px;
+  color: var(--nerd-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 12px;
+}
+.modes-detail .mode-desc:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.modes-empty {
+  color: var(--nerd-muted);
+  font-size: 14px;
+  padding-top: 4px;
+}
+
+/* ---- shortcuts tab ---- */
+.shortcuts-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid var(--nerd-line);
+  border-bottom: 1px solid var(--nerd-line);
+  padding: 24px 0;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+}
+.shortcut-row .label {
+  font-size: 14px;
+  color: var(--nerd-fg);
+}
+.key-combo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.key-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--nerd-bubble);
+  color: var(--nerd-fg-secondary);
+  font-size: 14px;
+}
+button.key-chip {
+  border: none;
+  font-family: inherit;
+  cursor: default;
+}
+button.key-chip.editable {
+  cursor: pointer;
+  outline: 1px dashed rgba(255, 255, 255, 0.3);
+  outline-offset: -1px;
+}
+button.key-chip.editable:hover {
+  background: rgba(255, 255, 255, 0.32);
+  color: #fff;
+}
+button.key-chip.capturing {
+  background: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  outline: 1px solid #fff;
+}
+
+/* ---- profile tab ---- */
+.profile-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  color: var(--nerd-muted);
+  border-top: 1px solid var(--nerd-line);
+  border-bottom: 1px solid var(--nerd-line);
+}

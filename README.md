@@ -1,12 +1,12 @@
-# .
+# nerd — "Know it all"
 
-An Electron application with React and TypeScript
+A real-time meeting copilot: a floating, always-on-top desktop overlay (macOS + Windows) that listens to a call, and on `⌘+Enter` answers from the recent conversation — grounded in Headout's synced Slack knowledge base. Hidden mode keeps it invisible to screen-share viewers.
 
-## Recommended IDE Setup
-
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+Built with Electron + React + Vite. The knowledge base is kept fresh by a separate host-laptop Slack sync job (planned).
 
 ## Project Setup
+
+Copy `.env.example` to `.env` and fill in the keys (Qdrant, Postgres, OpenAI, Cohere, Deepgram).
 
 ### Install
 
@@ -20,15 +20,17 @@ $ npm install
 $ npm run dev
 ```
 
-### Build
+### Checks & build
 
 ```bash
-# For windows
-$ npm run build:win
+$ npm run check       # runnable self-checks (rerank + transcript buffer)
+$ npm run typecheck
+$ npm run lint
+$ npm run build
+```
 
-# For macOS
-$ npm run build:mac
+### Package
 
-# For Linux
-$ npm run build:linux
+```bash
+$ npm run build:mac   # or build:win / build:linux
 ```

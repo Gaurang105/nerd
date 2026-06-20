@@ -3,5 +3,11 @@ dist
 out
 .DS_Store
 .eslintcache
+*.tsbuildinfo
 *.log*
 .env
+.agents/
+.claude/
+.cursor/
+# one-time Slack extraction dumps (not committed)
+data/
