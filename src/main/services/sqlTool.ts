@@ -47,7 +47,7 @@ export const SQL_TOOL: OpenAI.Chat.Completions.ChatCompletionTool = {
   function: {
     name: 'query_database',
     description:
-      'Run a read-only SQL query against the Headout Postgres database to answer ' +
+      'Run a read-only SQL query against the company Postgres database to answer ' +
       'structured questions (filters, counts, aggregations, date ranges). Use the table ' +
       'definitions in the DATABASE section of the prompt. Only a single SELECT/WITH ' +
       'statement is allowed.',

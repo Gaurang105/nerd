@@ -1,7 +1,7 @@
 {
   "name": "nerd",
   "version": "1.0.0",
-  "description": "nerd — real-time meeting copilot (floating desktop overlay)",
+  "description": "Real-time meeting copilot grounded in your company's internal knowledge base",
   "main": "./out/main/index.js",
   "author": "headout",
   "scripts": {
